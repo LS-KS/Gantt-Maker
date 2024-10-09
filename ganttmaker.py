@@ -1,18 +1,16 @@
 import datetime
 import warnings
-
-import pandas
 import pandas as pd
 import openpyxl
 import os
 
 
 _units = {
-    'pt': 1,                   # 1 point is 1 point
+    'pt': 1,                     # 1 point is 1 point
     'px': 1/0.75,                # 1 pixel ≈ 0.75 points (at 96 DPI)
     'mm': 1/0.352778,            # 1 point = 0.352778 mm
     'cm': 1/0.0352778,           # 1 point = 0.0352778 cm
-    'in': 72                   # 1 inch = 72 points
+    'in': 72                     # 1 inch = 72 points
 }
 
 class Task(object):
@@ -37,6 +35,20 @@ class Task(object):
         raise AttributeError("Use with_children() to add a child and without_children() to remove a child")
 
     def with_children(self, task: 'Task'):
+        """
+        This method adds the argument to he children attribute
+        Calls arguments with_parents method for self-referencing behaviour.
+
+        Parameters:
+          task: 'Task' object that shall be added as a child
+        
+        Returns:
+          None
+        
+        Raises:
+          TypeError: If the object is not a 'Task' object.
+
+        """
         if not isinstance(task, Task):
             raise TypeError("Successor must be a Task object")
         if task in self._children:
@@ -47,10 +59,26 @@ class Task(object):
             task.with_parents(self)
 
     def without_children(self, task: 'Task'):
+        """
+        This nethod removes the given task from children.
+        For self-referencing, calls without_parents method from argument
+        
+        Parameters:
+          task: Task object that shall be removed from children attribute
+
+        Returns:
+          None
+
+        Raises:
+          TypeError if the argument is not a Task object
+
+        """
+        if not isinstance(task, Task):
+            raise(TypeError, "Argument is not a 'Task' object")
         if task not in self.children:
             return
         else:
-            self.without_children(task)
+            self._children.remove(task)
             task.without_parents(self)
 
     def with_parents(self, task: 'Task'):
@@ -64,6 +92,22 @@ class Task(object):
             task._children.append(self)
 
     def without_parents(self, task: 'Task'):
+        """
+        This nethod removes the given task from parents.
+        For self-referencing, calls without_children method from argument
+        
+        Parameters:
+          task: Task object that shall be removed from parents attribute
+
+        Returns:
+          None
+
+        Raises:
+          TypeError if the argument is not a Task object
+
+        """
+        if not isinstance(task, Task):
+            raise(TypeError, "Argument is not a 'Task' object")
         if task not in self._parents:
             return
         else:
@@ -235,6 +279,7 @@ class Figure:
         tasks = self._compute_task_chain()
         self._update_start_dates(tasks)
         critical_path = self._compute_critical_path(tasks)
+
     def _define_task_height(self) -> int:
         if self.canvas_size is None:
             raise ValueError("canvas_size not set")
@@ -289,9 +334,22 @@ class Figure:
             main_task = tasks.pop(0)
         return initial_task
 
-    def _compute_critical_path(self, tasks: Task) -> Task:
-        critical_path = Task()
-        warnings.warn("Critical path not implemented", UserWarning)
+    def _compute_critical_path(self) -> list[Task]:
+        """
+        Walks the task-tree and adds  critical steps into a list.
+        
+        Returns:
+            critical_path: list[Task] an ordered list of tasks that represent the critical path
+
+        """
+        critical_path: list[Task] = []
+
+        depth: int = 0
+        end = False
+        while not end:
+            for child in self.tasks.children:
+                pass
+
         return critical_path
 
     def _update_start_dates(self, tasks: Task):

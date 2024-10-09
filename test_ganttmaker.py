@@ -75,19 +75,19 @@ def test_draw():
 
 def test_Task():
     task_1 = ganttmaker.Task(
-        'Task 1',
-        pd.Timestamp('2021-01-01'),
-        pd.Timestamp('2021-01-02'),
-    "Do something",
-    "2.1;2.2;2.3")
+        task_no = '1.0',
+        start = pd.Timestamp('2021-01-01'),
+        end= pd.Timestamp('2021-01-02'),
+        description= "Do something",
+        predecessor = "2.1;2.2;2.3")
     assert task_1 is not None
 
     task_2 = ganttmaker.Task(
-        'Task 2',
-        pd.Timestamp('2021-01-02'),
-        pd.Timestamp('2021-01-03'),
-    "Do something else",
-    "3.1;3.2;3.3")
+        task_no = 'Task 2',
+        start = pd.Timestamp('2021-01-02'),
+        end = pd.Timestamp('2021-01-03'),
+        description = "Do something else",
+        predecessor = "3.1;3.2;3.3")
     assert task_2 is not None
 
     task_1.with_children(task_2)

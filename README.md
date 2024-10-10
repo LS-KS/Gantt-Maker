@@ -7,6 +7,8 @@ This repository is made for fun and was actually used to render diagrams in my s
 Feel free to copy and/or improve. 
 Every Pull Request will be checked and accepted if I'll find it suitable.
 
+![Gantt Diagram](https://github.com/LS-KS/Gantt-Maker/blob/main/example_data/project_a.png)
+
 # Dependencies
 
 Qt bindings PySide6 are used as the render backend which is the reason Qt classes are preferred datatypes. 

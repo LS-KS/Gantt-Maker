@@ -1,9 +1,12 @@
 import datetime
-import warnings
+import sys
+
 import pandas as pd
 import openpyxl
 import os
-
+import PySide6
+from PySide6.QtGui import QImage, QPainter, QPen, QFont, QGuiApplication, QColor
+from PySide6.QtCore import Qt, QPoint
 
 _units = {
     'pt': 1,                     # 1 point is 1 point
@@ -12,6 +15,9 @@ _units = {
     'cm': 1/0.0352778,           # 1 point = 0.0352778 cm
     'in': 72                     # 1 inch = 72 points
 }
+
+# color palette: https://www.learnui.design/tools/data-color-picker.html#palette
+_colors = ["#003f5c", "#2f4b7c", "#665191", "#a05195", "#d45087", "#f95d6a", "#ff7c43", "#ffa600"]
 
 class Task(object):
     _empty_task = None
@@ -169,16 +175,16 @@ class Task(object):
         else:
             raise TypeError("Predecessor must be a string, delimited by ';'")
 class RenderMetrics:
-    title_height: int = 20
+    title_height: int = 50
     title_padding: int = 10
     vertical_padding: int = 10
     horizontal_padding: int = 5
     axis_width: int = 20
     axis_height: int = 20
     axis_padding: int = 10
-
     min_task_height: int = 20
     max_task_description_width: int = 200
+    legend_width: int = 5
 
 class Dataloader:
     _file = None
@@ -204,6 +210,8 @@ class Dataloader:
         # data = openpyxl.load_workbook(self.file)
         data = pd.read_excel(self.file, engine='openpyxl', dtype={'Task': str, 'Predecessor': str})
         self.validate_columns(data)
+        data['Plan-Start'] = pd.to_datetime(data['Plan-Start'], format='%d.%m.%Y')
+        data['Actual-Start'] = pd.to_datetime(data['Actual-Start'], format='%d.%m.%Y')
         data['Plan-End'] = pd.to_datetime(data['Plan-End'], format='%d.%m.%Y')
         data['Actual-End'] = pd.to_datetime(data['Actual-End'], format='%d.%m.%Y')
         data['Task'] = data['Task']
@@ -222,11 +230,60 @@ class Dataloader:
 
 class Figure:
     def __init__(self):
+        self._export_file = None
         self._start_date: datetime.date = None
         self._canvas_size: tuple[int, int] = None
         self._unit: float = _units['px']
         self._loader = None
         self.render_metrics = RenderMetrics()
+        self.title = "Gantt Chart"
+        self.title_font = QFont("Arial", 24)
+        self._title_font = None
+        self._title_color = QColor('black')
+        self._legend_font = None
+        self.legend_font = QFont("Arial", 12)
+        self._legend_color = None
+        self.legend_color = QColor('black')
+
+    @property
+    def legend_color(self):
+        return self._legend_color
+
+    @legend_color.setter
+    def legend_color(self, color: QColor):
+        if not isinstance(color, QColor):
+            raise TypeError("legend_color must be a QColor object")
+        self._legend_color = color
+
+    @property
+    def legend_font(self):
+        return self._legend_font
+
+    @legend_font.setter
+    def legend_font(self, font: QFont):
+        if not isinstance(font, QFont):
+            raise TypeError("legend_font must be a QFont object")
+        self._legend_font = font
+
+    @property
+    def title_font(self):
+        return self._title_font
+
+    @title_font.setter
+    def title_font(self, font: QFont):
+        if not isinstance(font, QFont):
+            raise TypeError("title_font must be a QFont object")
+        self._title_font = font
+
+    @property
+    def title_color(self):
+        return self._title_color
+
+    @title_color.setter
+    def title_color(self, color: QColor):
+        if not isinstance(color, QColor):
+            raise TypeError("title_color must be a QColor object")
+        self._title_color = color
 
     @property
     def start_date(self):
@@ -263,7 +320,16 @@ class Figure:
         else:
             raise ValueError("canvas_size must be a tuple of two integers")
 
+    @property
+    def export_file(self):
+        return self._export_file
+
+    @export_file.setter
+    def export_file(self, file: str):
+        self._export_file = file
+
     def draw(self, loader: Dataloader):
+        # guard checks
         if self.start_date is None:
             raise ValueError("start_date not set")
         if self.canvas_size is None:
@@ -273,34 +339,124 @@ class Figure:
         self._loader = loader
         if self._loader._data is None:
             self._loader.load()
-        task_height: int = self._define_task_height()
-        task_width: int = self._define_task_width()
-        figure_start: tuple[int, int]  = self._define_drawingstart()
-        tasks = self._compute_task_chain()
-        self._update_start_dates(tasks)
-        critical_path = self._compute_critical_path(tasks)
 
-    def _define_task_height(self) -> int:
+        # get or construct QApplication instance
+        if not QGuiApplication.instance():
+            app = QGuiApplication(sys.argv)
+        else:
+            app = QGuiApplication(sys.argv)
+
+        figure_start: tuple[int, int] = self._define_drawingstart()
+        figure_width = self.canvas_size[0] - figure_start[0] - self.render_metrics.horizontal_padding
+        figure_height = self.canvas_size[1] - figure_start[1] - self.render_metrics.vertical_padding
+        task_height: int = self._define_task_height(figure_height)
+        task_width: int = self._define_task_width(figure_width)
+
+
+        axes_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
+
+        arrows_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
+        image = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
+
+        # painter initialization
+        painter = QPainter()
+
+        # pen initialization
+        box_pen = QPen(Qt.black, 3, Qt.SolidLine)
+        grid_pen = QPen(Qt.gray, 0.5, Qt.DotLine)
+        axes_pen = QPen(Qt.black, 2, Qt.SolidLine)
+        legend_pen = QPen(self.legend_color, 2, Qt.SolidLine)
+        graph_pen = QPen(Qt.blue, 2, Qt.SolidLine)
+        title_pen = QPen(Qt.black, 2, Qt.SolidLine)
+        arrows_pen = QPen(Qt.black, 2, Qt.SolidLine)
+
+        # draw image layers
+        box_layer = self.draw_box_layer(box_pen, figure_start, figure_width, figure_height, painter)
+        box_layer = self.draw_title(box_layer, painter, title_pen, figure_start, self.title)
+        box_layer = self.draw_legend(box_layer, painter, legend_pen, figure_start, task_height)
+        grid_layer = self.draw_grid_layer(figure_start, grid_pen, painter, task_width, task_height, figure_width)
+        graph_layer = self.draw_tasks(figure_start, graph_pen, painter, task_height, task_width)
+
+
+        painter.begin(image)
+        painter.drawImage(0, 0, box_layer)
+        painter.drawImage(0, 0, grid_layer)
+        painter.drawImage(0, 0, axes_layer)
+        painter.drawImage(0, 0, graph_layer)
+        painter.drawImage(0, 0, arrows_layer)
+        painter.end()
+        image.save(self.export_file)
+
+    def draw_tasks(self, figure_start, task_pen, painter, task_height, task_width):
+        graph_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
+        painter.begin(graph_layer)
+        self.set_painter_renderoptions(painter)
+        painter.setPen(task_pen)
+        for i, task in enumerate(self._loader._data.itertuples()):
+            plan_start = self._loader._data['Plan-Start'][i].date()
+            plan_end = self._loader._data['Plan-End'][i].date()
+            x_start = figure_start[0] + task_width * (plan_start - self.start_date).days + self.render_metrics.horizontal_padding
+            x_end = figure_start[0] + task_width * (plan_end - self.start_date).days + self.render_metrics.horizontal_padding
+            width = x_end - x_start + task_width
+            y = figure_start[1] + self.render_metrics.vertical_padding + i * task_height
+            painter.drawRect(x_start, y, width, task_height)
+        painter.end()
+        return graph_layer
+
+    def draw_grid_layer(self, figure_start, grid_pen, painter, task_width, task_height, figure_width):
+        grid_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
+        painter.begin(grid_layer)
+        self.set_painter_renderoptions(painter)
+        painter.setPen(grid_pen)
+
+        # draw vertical lines
+        for i in range((self._loader._data['Plan-End'].max().date() - self.start_date).days + 2):
+            x = figure_start[0] + i * task_width + self.render_metrics.horizontal_padding
+            painter.drawLine(x, figure_start[1], x, self.canvas_size[1] - self.render_metrics.vertical_padding)
+
+        # draw horizontal lines
+        for i in range(len(self._loader._data)+1):
+            y = figure_start[1] + self.render_metrics.vertical_padding + i * task_height
+            painter.drawLine(
+                figure_start[0], y,
+                figure_start[0] + figure_width, y)
+
+        painter.end()
+        return grid_layer
+
+    def draw_box_layer(self, box_pen, figure_start, width, height, painter):
+        box_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
+        painter.begin(box_layer)
+        self.set_painter_renderoptions(painter)
+        painter.setPen(box_pen)
+        # draw figure box
+        painter.drawRect(
+            figure_start[0],
+            figure_start[1],
+            width,
+            height
+        )
+        painter.end()
+        return box_layer
+
+    def set_painter_renderoptions(self, painter):
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.TextAntialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+    def _define_task_height(self, height) -> int:
         if self.canvas_size is None:
             raise ValueError("canvas_size not set")
-        height = self.canvas_size[1]
-        av_height = height - self.render_metrics.title_height
-        av_height -= self.render_metrics.title_padding
-        av_height -= self.render_metrics.vertical_padding
-        av_height -= self.render_metrics.axis_height
-        av_height -= self.render_metrics.axis_padding * 2
+        height -= 2* self.render_metrics.vertical_padding
         num_tasks = len(self._loader._data)
-        if int(av_height / num_tasks) < self.render_metrics.min_task_height:
+        if int(height / num_tasks) < self.render_metrics.min_task_height:
             raise ValueError("Canvas too small for all tasks or RenderMetrics inappropriately set")
-        return int(av_height / num_tasks)
+        return int(height / num_tasks)
 
-    def _define_task_width(self) -> int:
+    def _define_task_width(self, width: int) -> int:
         if self.canvas_size is None:
             raise ValueError("canvas_size not set")
-        width = self.canvas_size[0]
-        av_width = width - self.render_metrics.axis_width
-        av_width -= self.render_metrics.horizontal_padding * 3
-        av_width -= self.render_metrics.max_task_description_width
+        av_width = width - 2 * self.render_metrics.horizontal_padding
         time_span = self._loader._data['Plan-End'].max().date() - self.start_date
         time_span = int(time_span.days)
         if int(av_width/time_span) < 1:
@@ -310,63 +466,40 @@ class Figure:
     def _define_drawingstart(self) -> tuple[int, int]:
         if self.canvas_size is None:
             raise ValueError("canvas_size not set")
-        x = self.render_metrics.axis_width + self.render_metrics.horizontal_padding
+        x = self.render_metrics.legend_width +  self.render_metrics.axis_width + self.render_metrics.horizontal_padding
         y = self.render_metrics.title_height + self.render_metrics.title_padding + self.render_metrics.vertical_padding
         return (x, y)
 
-    def _compute_task_chain(self) -> Task:
-        tasks = []
-        for i in range(0, len(self._loader._data)):
-            task = Task(
+    def draw_title(self, box_layer, painter, title_pen, figure_start, title: str = "Gantt Chart"):
+        painter.begin(box_layer)
+        self.set_painter_renderoptions(painter)
+        painter.setPen(title_pen)
+        painter.setFont(QFont("Arial", 30))
+        painter.drawText(
+            0,
+            self.render_metrics.title_padding,
+            self.canvas_size[0],
+            self.render_metrics.title_height,
+            Qt.AlignCenter,
+            title)
+        painter.end()
+        return box_layer
+
+    def draw_legend(self, box_layer, painter, pen,  figure_start, task_height):
+        painter.begin(box_layer)
+        self.set_painter_renderoptions(painter)
+        painter.setPen(pen)
+        for i, task in enumerate(self._loader._data.itertuples()):
+            y = figure_start[1] + self.render_metrics.vertical_padding + i * task_height
+            x = self.render_metrics.horizontal_padding
+            painter.drawText(
+                x,
+                y,
+                self.render_metrics.legend_width,
+                task_height,
+                Qt.AlignRight | Qt.AlignVCenter,
                 self._loader._data['Task'][i],
-                self._loader._data['Plan-End'][i],
-                self._loader._data['Actual-End'][i],
-                self._loader._data['Description'][i],
-                self._loader._data['Predecessor'][i],
             )
-            tasks.append(task)
-        initial_task = tasks.pop(0)
-        main_task = initial_task
-        while len(tasks) >0:
-            for i, subtask in enumerate(tasks):
-                if str(main_task.name) in subtask.predecessors:
-                    main_task.with_children(subtask)
-            main_task = tasks.pop(0)
-        return initial_task
+        painter.end()
+        return box_layer
 
-    def _compute_critical_path(self) -> list[Task]:
-        """
-        Walks the task-tree and adds  critical steps into a list.
-        
-        Returns:
-            critical_path: list[Task] an ordered list of tasks that represent the critical path
-
-        """
-        critical_path: list[Task] = []
-
-        depth: int = 0
-        end = False
-        while not end:
-            for child in self.tasks.children:
-                pass
-
-        return critical_path
-
-    def _update_start_dates(self, tasks: Task):
-        def _get_latest_end_date(task: Task) -> datetime.date:
-            latest = None
-            for parent in task.parents:
-                if latest is None:
-                    latest = parent.end
-                elif parent.end > latest:
-                    latest = parent.end
-            return latest
-
-        if tasks.parents == []:
-            tasks.start = self.start_date
-        else:
-            latest = _get_latest_end_date(tasks)
-            tasks.start = latest
-
-        for child in tasks.children:
-            self._update_start_dates(child)

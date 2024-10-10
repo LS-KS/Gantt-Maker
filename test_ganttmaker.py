@@ -54,7 +54,7 @@ def test_draw():
     loader = ganttmaker.Dataloader(testfile)
     loader.load()
     drawer = ganttmaker.Figure()
-    drawer.start_date = pd.Timestamp('2024-07-01')
+    drawer.start_date = pd.Timestamp('2024-08-01')
     drawer.canvas_size = (800, 600)
     drawer.draw(loader)
 

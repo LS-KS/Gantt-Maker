@@ -25,9 +25,11 @@ figure.title_color = QColor(ganttmaker._colors[0])
 # set axis properties
 figure.axes_font = QFont('Arial', 24)
 figure.axes_color = QColor(ganttmaker._colors[0])
+figure.time_highlightline_color = QColor(ganttmaker._colors[0])
+figure.time_highlightline_width = (1, 5)
 
 # set box and background properties
-figure.box_color = QColor(ganttmaker._colors[0])
+figure.box_color = QColor(QColor('transparent'))
 figure.background_color = QColor('transparent')
 
 # set legend properties

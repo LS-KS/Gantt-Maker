@@ -230,6 +230,9 @@ class Dataloader:
 
 class Figure:
     def __init__(self):
+        self._time_highlightline_width = (0.75, 2.5)
+        self._time_highlightline_color = None
+        self.time_highlightline_color = QColor('red')
         self._background_color = None
         self.background_color = QColor('transparent')
         self._axes_color = None
@@ -258,6 +261,28 @@ class Figure:
         self.legend_font = QFont("Arial", 12)
         self._legend_color = None
         self.legend_color = QColor('black')
+
+    @property
+    def time_highlightline_width(self) -> tuple[float, float]:
+        return self._time_highlightline_width
+
+    @time_highlightline_width.setter
+    def time_highlightline_width(self, width: tuple[int, int]):
+        if not isinstance(width, tuple):
+            raise TypeError("time_highlightline_width must be a tuplpe of floats")
+        elif len(width) != 2:
+            raise ValueError("time_highlightline_width must be a tuple of two floats")
+        self._time_highlightline_width = width
+
+    @property
+    def time_highlightline_color(self):
+        return self._time_highlightline_color
+
+    @time_highlightline_color.setter
+    def time_highlightline_color(self, color: QColor):
+        if not isinstance(color, QColor):
+            raise TypeError("time_highlightline_color must be a QColor object")
+        self._time_highlightline_color = color
 
     @property
     def background_color(self):
@@ -463,7 +488,7 @@ class Figure:
         box_layer = self.draw_title(box_layer, painter, title_pen, figure_start, self.title)
         box_layer = self.draw_legend(box_layer, painter, legend_pen, figure_start, task_height, self.legend_font)
         grid_layer = self.draw_grid_layer(figure_start, grid_pen, painter, task_width, task_height, figure_width)
-        grid_layer = self.draw_monday_lines(grid_layer, figure_start, box_pen, painter, task_width, task_height)
+        grid_layer = self.draw_monday_lines(grid_layer, figure_start, painter, task_width)
         graph_layer = self.draw_tasks(figure_start, graph_pen, self.task_brush_saturation, painter, task_height, task_width)
         axes_layer = self.draw_xaxis(figure_start, figure_width, figure_height, task_width,painter, axes_pen, self.axes_font)
 
@@ -476,20 +501,18 @@ class Figure:
         painter.end()
         image.save(self.export_file)
 
-    def draw_monday_lines(self, layer, figure_start, pen, painter, task_width, task_height):
+    def draw_monday_lines(self, layer, figure_start, painter, task_width):
+        monday_pen = QPen(self.time_highlightline_color, self.time_highlightline_width[0], Qt.SolidLine)
+        monthly_pen = QPen(self.time_highlightline_color, self.time_highlightline_width[1], Qt.SolidLine)
         painter.begin(layer)
-        pen.setWidth(0.75*pen.width())
-        painter.setPen(pen)
         dates = (self._loader._data['Plan-End'].max().date() - self.start_date).days + 1
         for i in range(dates):
             x = int(figure_start[0] + i * task_width + self.render_metrics.horizontal_padding)
             if (self.start_date + datetime.timedelta(days=i)).weekday() == 0:
-                pen.setWidth(0.75 * pen.width())
-                painter.setPen(pen)
+                painter.setPen(monday_pen)
                 painter.drawLine(x, figure_start[1], x, self.canvas_size[1] - self.render_metrics.vertical_padding)
             if (self.start_date + datetime.timedelta(days=i)).day == 1:
-                pen.setWidth(2.5 * pen.width())
-                painter.setPen(pen)
+                painter.setPen(monthly_pen)
                 painter.drawLine(x, figure_start[1] - self.render_metrics.axis_height, x, self.canvas_size[1] - self.render_metrics.vertical_padding)
         painter.end()
         return layer
@@ -515,7 +538,7 @@ class Figure:
                 text)
             if date.day == 1:
                 painter.drawText(
-                    x,
+                    x + self.render_metrics.horizontal_padding,
                     (start[1]
                      - self.render_metrics.axis_height
                      - self.render_metrics.axis_padding
@@ -526,7 +549,16 @@ class Figure:
                      + self.render_metrics.title_padding),
                     Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
                     date.strftime('%B %Y'))
+        painter.drawText(
+            self.render_metrics.horizontal_padding,
+            self.canvas_size[1] - self.render_metrics.vertical_padding - self.render_metrics.axis_height,
+            self.canvas_size[0] - self.render_metrics.horizontal_padding * 2,
+            self.render_metrics.axis_height + self.render_metrics.vertical_padding,
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
+            'created: ' + datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
         painter.end()
+
         return axes_layer
 
     def draw_tasks(self, figure_start: tuple[int, int], task_pen: QPen, brush_saturation: int, painter: QPainter, task_height: int, task_width: int):

@@ -5,8 +5,8 @@ import pandas as pd
 import openpyxl
 import os
 import PySide6
-from PySide6.QtGui import QImage, QPainter, QPen, QFont, QGuiApplication, QColor
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtGui import QImage, QPainter, QPen, QFont, QGuiApplication, QColor, QBrush
+from PySide6.QtCore import Qt
 
 _units = {
     'pt': 1,                     # 1 point is 1 point
@@ -230,6 +230,18 @@ class Dataloader:
 
 class Figure:
     def __init__(self):
+        self._background_color = None
+        self.background_color = QColor('transparent')
+        self._axes_color = None
+        self.axes_color = QColor('black')
+        self._task_line_width = None
+        self.task_line_width = 4
+        self._task_brush_saturation = None
+        self.task_brush_saturation = 127
+        self._box_width = None
+        self.box_width = 2
+        self._box_color = None
+        self.box_color = QColor('black')
         self._export_file = None
         self._start_date: datetime.date = None
         self._canvas_size: tuple[int, int] = None
@@ -238,12 +250,86 @@ class Figure:
         self.render_metrics = RenderMetrics()
         self.title = "Gantt Chart"
         self.title_font = QFont("Arial", 24)
+        self._axes_font = None
+        self.axes_font = QFont("Arial", 10)
         self._title_font = None
         self._title_color = QColor('black')
         self._legend_font = None
         self.legend_font = QFont("Arial", 12)
         self._legend_color = None
         self.legend_color = QColor('black')
+
+    @property
+    def background_color(self):
+        return self._background_color
+
+    @background_color.setter
+    def background_color(self, color: QColor):
+        if not isinstance(color, QColor):
+            raise TypeError("background_color must be a QColor object")
+        self._background_color = color
+
+    @property
+    def axes_color(self):
+        return self._axes_color
+
+    @axes_color.setter
+    def axes_color(self, color: QColor):
+        if not isinstance(color, QColor):
+            raise TypeError("axes_color must be a QColor object")
+        self._axes_color = color
+    @property
+    def axes_font(self):
+        return self._axes_font
+
+    @axes_font.setter
+    def axes_font(self, font: QFont):
+        if not isinstance(font, QFont):
+            raise TypeError("axes_font must be a QFont object")
+        self._axes_font = font
+
+    @property
+    def task_brush_saturation(self):
+        return self._task_brush_saturation
+
+    @task_brush_saturation.setter
+    def task_brush_saturation(self, saturation: int):
+        if not isinstance(saturation, int):
+            raise TypeError("task_brush_saturation must be an integer")
+        elif saturation < 0 or saturation > 255:
+            raise ValueError("task_brush_saturation must be between 0 and 255")
+        self._task_brush_saturation = saturation
+
+    @property
+    def task_line_width(self):
+        return self._task_line_width
+
+    @task_line_width.setter
+    def task_line_width(self, width: int):
+        if not isinstance(width, int):
+            raise TypeError("task_line_width must be an integer")
+        self._task_line_width = width
+
+    @property
+    def box_width(self):
+        return self._box_width
+
+    @box_width.setter
+    def box_width(self, width: int):
+        if not isinstance(width, int):
+            raise TypeError("box_width must be an integer")
+        self._box_width = width
+
+    @property
+    def box_color(self):
+        return self._box_color
+
+    @box_color.setter
+    def box_color(self, color: QColor):
+        if not isinstance(color, QColor):
+            raise TypeError("box_color must be a QColor object")
+        self._box_color = color
+
 
     @property
     def legend_color(self):
@@ -348,35 +434,38 @@ class Figure:
 
         figure_start: tuple[int, int] = self._define_drawingstart()
         figure_width = self.canvas_size[0] - figure_start[0] - self.render_metrics.horizontal_padding
-        figure_height = self.canvas_size[1] - figure_start[1] - self.render_metrics.vertical_padding
+        figure_height = (self.canvas_size[1]
+                         - figure_start[1]
+                         - self.render_metrics.vertical_padding
+                         - self.render_metrics.axis_height
+                         - self.render_metrics.vertical_padding )
         task_height: int = self._define_task_height(figure_height)
         task_width: int = self._define_task_width(figure_width)
 
-
-        axes_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
-
         arrows_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
         image = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
+        image.fill(self.background_color)
 
         # painter initialization
         painter = QPainter()
 
         # pen initialization
-        box_pen = QPen(Qt.black, 3, Qt.SolidLine)
+        box_pen = QPen(self._box_color, self.box_width, Qt.SolidLine)
         grid_pen = QPen(Qt.gray, 0.5, Qt.DotLine)
-        axes_pen = QPen(Qt.black, 2, Qt.SolidLine)
+        axes_pen = QPen(self.axes_color, 2, Qt.SolidLine)
         legend_pen = QPen(self.legend_color, 2, Qt.SolidLine)
-        graph_pen = QPen(Qt.blue, 2, Qt.SolidLine)
-        title_pen = QPen(Qt.black, 2, Qt.SolidLine)
+        graph_pen = QPen(Qt.blue, self.task_line_width, Qt.SolidLine)
+        title_pen = QPen(self.title_color, 2, Qt.SolidLine)
         arrows_pen = QPen(Qt.black, 2, Qt.SolidLine)
 
         # draw image layers
         box_layer = self.draw_box_layer(box_pen, figure_start, figure_width, figure_height, painter)
         box_layer = self.draw_title(box_layer, painter, title_pen, figure_start, self.title)
-        box_layer = self.draw_legend(box_layer, painter, legend_pen, figure_start, task_height)
+        box_layer = self.draw_legend(box_layer, painter, legend_pen, figure_start, task_height, self.legend_font)
         grid_layer = self.draw_grid_layer(figure_start, grid_pen, painter, task_width, task_height, figure_width)
-        graph_layer = self.draw_tasks(figure_start, graph_pen, painter, task_height, task_width)
-
+        grid_layer = self.draw_monday_lines(grid_layer, figure_start, box_pen, painter, task_width, task_height)
+        graph_layer = self.draw_tasks(figure_start, graph_pen, self.task_brush_saturation, painter, task_height, task_width)
+        axes_layer = self.draw_xaxis(figure_start, figure_width, figure_height, task_width,painter, axes_pen, self.axes_font)
 
         painter.begin(image)
         painter.drawImage(0, 0, box_layer)
@@ -387,12 +476,70 @@ class Figure:
         painter.end()
         image.save(self.export_file)
 
-    def draw_tasks(self, figure_start, task_pen, painter, task_height, task_width):
+    def draw_monday_lines(self, layer, figure_start, pen, painter, task_width, task_height):
+        painter.begin(layer)
+        pen.setWidth(0.75*pen.width())
+        painter.setPen(pen)
+        dates = (self._loader._data['Plan-End'].max().date() - self.start_date).days + 1
+        for i in range(dates):
+            x = int(figure_start[0] + i * task_width + self.render_metrics.horizontal_padding)
+            if (self.start_date + datetime.timedelta(days=i)).weekday() == 0:
+                pen.setWidth(0.75 * pen.width())
+                painter.setPen(pen)
+                painter.drawLine(x, figure_start[1], x, self.canvas_size[1] - self.render_metrics.vertical_padding)
+            if (self.start_date + datetime.timedelta(days=i)).day == 1:
+                pen.setWidth(2.5 * pen.width())
+                painter.setPen(pen)
+                painter.drawLine(x, figure_start[1] - self.render_metrics.axis_height, x, self.canvas_size[1] - self.render_metrics.vertical_padding)
+        painter.end()
+        return layer
+
+    def draw_xaxis(self, start, width, height, task_width,  painter, pen, font):
+        axes_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
+        painter.begin(axes_layer)
+        painter.setPen(pen)
+        painter.setFont(font)
+        dates = (self._loader._data['Plan-End'].max().date() - self.start_date).days + 1
+        for i in range(dates):
+            x = int(start[0]
+                    + i * task_width
+                    + self.render_metrics.horizontal_padding
+                 )
+            y = start[1] + height + self.render_metrics.vertical_padding
+            date = self.start_date + datetime.timedelta(days=i)
+            text = date.strftime('%A')[0:2]
+            painter.drawText(
+                x,y,
+                task_width, self.render_metrics.axis_height,
+                Qt.AlignmentFlag.AlignCenter,
+                text)
+            if date.day == 1:
+                painter.drawText(
+                    x,
+                    (start[1]
+                     - self.render_metrics.axis_height
+                     - self.render_metrics.axis_padding
+                     - self.render_metrics.title_padding),
+                    task_width * 30,
+                    (self.render_metrics.axis_height
+                     + self.render_metrics.axis_padding
+                     + self.render_metrics.title_padding),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
+                    date.strftime('%B %Y'))
+        painter.end()
+        return axes_layer
+
+    def draw_tasks(self, figure_start: tuple[int, int], task_pen: QPen, brush_saturation: int, painter: QPainter, task_height: int, task_width: int):
         graph_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format_ARGB32)
         painter.begin(graph_layer)
         self.set_painter_renderoptions(painter)
         painter.setPen(task_pen)
         for i, task in enumerate(self._loader._data.itertuples()):
+            painter.setPen(QColor(_colors[i % len(_colors)]))
+            brush_color = QColor(_colors[i % len(_colors)])
+            brush_color.setAlpha(brush_saturation)
+            task_brush = QBrush(brush_color)
+            painter.setBrush(task_brush)
             plan_start = self._loader._data['Plan-Start'][i].date()
             plan_end = self._loader._data['Plan-End'][i].date()
             x_start = figure_start[0] + task_width * (plan_start - self.start_date).days + self.render_metrics.horizontal_padding
@@ -418,7 +565,7 @@ class Figure:
         for i in range(len(self._loader._data)+1):
             y = figure_start[1] + self.render_metrics.vertical_padding + i * task_height
             painter.drawLine(
-                figure_start[0], y,
+                figure_start[0] - self.render_metrics.legend_width, y,
                 figure_start[0] + figure_width, y)
 
         painter.end()
@@ -466,15 +613,21 @@ class Figure:
     def _define_drawingstart(self) -> tuple[int, int]:
         if self.canvas_size is None:
             raise ValueError("canvas_size not set")
-        x = self.render_metrics.legend_width +  self.render_metrics.axis_width + self.render_metrics.horizontal_padding
-        y = self.render_metrics.title_height + self.render_metrics.title_padding + self.render_metrics.vertical_padding
+        x = (self.render_metrics.legend_width
+             + self.render_metrics.axis_width
+             + self.render_metrics.horizontal_padding)
+        y = (self.render_metrics.title_height
+             + self.render_metrics.title_padding
+             + self.render_metrics.vertical_padding
+             + self.render_metrics.axis_height
+             )
         return (x, y)
 
     def draw_title(self, box_layer, painter, title_pen, figure_start, title: str = "Gantt Chart"):
         painter.begin(box_layer)
         self.set_painter_renderoptions(painter)
         painter.setPen(title_pen)
-        painter.setFont(QFont("Arial", 30))
+        painter.setFont(self.title_font)
         painter.drawText(
             0,
             self.render_metrics.title_padding,
@@ -485,10 +638,11 @@ class Figure:
         painter.end()
         return box_layer
 
-    def draw_legend(self, box_layer, painter, pen,  figure_start, task_height):
+    def draw_legend(self, box_layer, painter, pen,  figure_start, task_height, font):
         painter.begin(box_layer)
         self.set_painter_renderoptions(painter)
         painter.setPen(pen)
+        painter.setFont(font)
         for i, task in enumerate(self._loader._data.itertuples()):
             y = figure_start[1] + self.render_metrics.vertical_padding + i * task_height
             x = self.render_metrics.horizontal_padding
@@ -497,8 +651,8 @@ class Figure:
                 y,
                 self.render_metrics.legend_width,
                 task_height,
-                Qt.AlignRight | Qt.AlignVCenter,
-                self._loader._data['Task'][i],
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                self._loader._data['Task'][i] +": " + self._loader._data['Description'][i],
             )
         painter.end()
         return box_layer

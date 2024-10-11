@@ -511,11 +511,13 @@ class Figure:
         box_layer = self.draw_box_layer(box_pen, figure_start, figure_width, figure_height, painter)
         box_layer = self.draw_title(box_layer, painter, title_pen, self.title)
         box_layer = self.draw_legend(box_layer, painter, legend_pen, figure_start, task_height, self.legend_font)
-        grid_layer = self.draw_grid_layer(figure_start, grid_pen, painter, task_width, task_height, figure_width)
-        grid_layer = self.draw_monday_lines(grid_layer, figure_start, painter, task_width)
+        grid_layer = self.draw_grid_layer(figure_start, grid_pen, painter, task_width, task_height, figure_width, 'Plan-End')
+        grid_layer = self.draw_monday_lines(grid_layer, figure_start, painter, task_width, 'Plan-End')
         graph_layer = self.draw_tasks(figure_start, graph_pen, self.task_brush_saturation, painter, task_height,
-                                      task_width)
-        axes_layer = self.draw_xaxis(figure_start, figure_height, task_width, painter, axes_pen, self.axes_font)
+                                      task_width, 'Plan-Start', 'Plan-End')
+        actual_layer = self.draw_tasks(figure_start, graph_pen, self.task_brush_saturation, painter, task_height,
+                                       task_width, 'Actual-Start', 'Actual-End', plan=False)
+        axes_layer = self.draw_xaxis(figure_start, figure_height, task_width, painter, axes_pen, self.axes_font, 'Plan-End')
 
         # combine all layers
         painter.begin(image)
@@ -523,13 +525,14 @@ class Figure:
         painter.drawImage(0, 0, grid_layer)
         painter.drawImage(0, 0, axes_layer)
         painter.drawImage(0, 0, graph_layer)
+        painter.drawImage(0, 0, actual_layer)
         painter.drawImage(0, 0, arrows_layer)
         painter.end()
 
         # save image
         image.save(self.export_file)
 
-    def draw_monday_lines(self, layer, figure_start, painter, task_width):
+    def draw_monday_lines(self, layer, figure_start, painter, task_width, column):
         """
         Method that draws vertical lines at the beginning of each week and month.
 
@@ -538,11 +541,12 @@ class Figure:
             figure_start: tuple[int, int], starting point of the figure
             painter: QPainter object (painting device)
             task_width: int that defines the width of a task
+            column: str, column of the data to be drawn
         """
         monday_pen = QPen(self.time_highlightline_color, self.time_highlightline_width[0], Qt.PenStyle.SolidLine)
         monthly_pen = QPen(self.time_highlightline_color, self.time_highlightline_width[1], Qt.PenStyle.SolidLine)
         painter.begin(layer)
-        dates = (self._loader.data['Plan-End'].max().date() - self.start_date).days + 1
+        dates = (self._loader.data[column].max().date() - self.start_date).days + 1
         for i in range(dates):
             x = int(figure_start[0] + i * task_width + self.render_metrics.horizontal_padding)
             if (self.start_date + datetime.timedelta(days=i)).weekday() == 0:
@@ -555,7 +559,7 @@ class Figure:
         painter.end()
         return layer
 
-    def draw_xaxis(self, start, height, task_width, painter, pen, font):
+    def draw_xaxis(self, start, height, task_width, painter, pen, font, column):
         """
         Method that draws the x-axis of the Gantt chart.
 
@@ -566,12 +570,13 @@ class Figure:
             painter: QPainter object (painting device)
             pen: QPen object, pen for the axes
             font: QFont object, font for the axes
+            column: str, column of the data to be drawn
         """
         axes_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         painter.begin(axes_layer)
         painter.setPen(pen)
         painter.setFont(font)
-        dates = (self._loader._data['Plan-End'].max().date() - self.start_date).days + 1
+        dates = (self._loader._data[column].max().date() - self.start_date).days + 1
         for i in range(dates):
             x = int(start[0]
                     + i * task_width
@@ -611,7 +616,7 @@ class Figure:
         return axes_layer
 
     def draw_tasks(self, figure_start: tuple[int, int], task_pen: QPen, brush_saturation: int, painter: QPainter,
-                   task_height: int, task_width: int):
+                   task_height: int, task_width: int, start_column, end_column, plan=True):
         """
         Method that draws the tasks of the Gantt chart.
 
@@ -626,15 +631,21 @@ class Figure:
         graph_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         painter.begin(graph_layer)
         self.set_painter_renderoptions(painter)
+
         painter.setPen(task_pen)
         for i, task in enumerate(self._loader._data.itertuples()):
             painter.setPen(QColor(_colors[i % len(_colors)]))
             brush_color = QColor(_colors[i % len(_colors)])
-            brush_color.setAlpha(brush_saturation)
+            if plan:
+                brush_color.setAlpha(0)
+                pen = painter.pen()
+                painter.setPen(pen)
+            else:
+                brush_color.setAlpha(brush_saturation)
             task_brush = QBrush(brush_color)
             painter.setBrush(task_brush)
-            plan_start = self._loader._data['Plan-Start'][i].date()
-            plan_end = self._loader._data['Plan-End'][i].date()
+            plan_start = self._loader._data[start_column][i].date()
+            plan_end = self._loader._data[end_column][i].date()
             x_start = figure_start[0] + task_width * (
                     plan_start - self.start_date).days + self.render_metrics.horizontal_padding
             x_end = figure_start[0] + task_width * (
@@ -645,7 +656,7 @@ class Figure:
         painter.end()
         return graph_layer
 
-    def draw_grid_layer(self, figure_start, grid_pen, painter, task_width, task_height, figure_width):
+    def draw_grid_layer(self, figure_start, grid_pen, painter, task_width, task_height, figure_width, column):
         """
         Method that draws the grid of the Gantt chart.
 
@@ -656,6 +667,7 @@ class Figure:
             task_width: int, width of a task
             task_height: int, height of a task
             figure_width: int, width of the figure
+            column: str, column of the data to be drawn
         """
         grid_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         painter.begin(grid_layer)
@@ -663,7 +675,7 @@ class Figure:
         painter.setPen(grid_pen)
 
         # draw vertical lines
-        for i in range((self._loader._data['Plan-End'].max().date() - self.start_date).days + 2):
+        for i in range((self._loader._data[column].max().date() - self.start_date).days + 2):
             x = figure_start[0] + i * task_width + self.render_metrics.horizontal_padding
             painter.drawLine(x, figure_start[1], x, self.canvas_size[1] - self.render_metrics.vertical_padding)
 

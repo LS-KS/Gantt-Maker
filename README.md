@@ -1,6 +1,6 @@
-# Gannt Diagram Maker
+# Gantt Diagram Maker
 
-**Gannt Diagram Maker** is a python module that aims to make professional gannt charts from Microsoft Excel sheets.
+**Gantt Diagram Maker** is a python module that aims to make professional gantt charts from Microsoft Excel sheets.
 This helps the user to visualize project structure and progress.
 
 This repository is made for fun and was actually used to render diagrams in my studywork. 
@@ -14,7 +14,7 @@ Feel free to copy and/or improve but leave a star if you like it :-)
 
 - Pandas is used together with the package openpyxl to load excel sheets.
   
-- openpyxl is used to reead .xlsx files
+- openpyxl is used to read .xlsx files
 
 - The underlying color palette is copied from https://www.learnui.design/tools/data-color-picker.html#palette. 
 

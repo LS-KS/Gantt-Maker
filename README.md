@@ -11,11 +11,13 @@ Every Pull Request will be checked and accepted if I'll find it suitable.
 
 # Dependencies
 
-Qt bindings PySide6 are used as the render backend which is the reason Qt classes are preferred datatypes. 
+- Qt bindings PySide6 are used as the render backend which is the reason Qt classes are preferred datatypes. 
 
-Pandas is used together with the package openpyxl to load excel sheets. 
+- Pandas is used together with the package openpyxl to load excel sheets.
+  
+- openpyxl is used to reead .xlsx files
 
-The underlying color palette is copied by https://www.learnui.design/tools/data-color-picker.html#palette. 
+- The underlying color palette is copied by https://www.learnui.design/tools/data-color-picker.html#palette. 
 
 # Known issues
 

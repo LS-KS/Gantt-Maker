@@ -40,7 +40,7 @@ Download at least [ganntmaker.py](https://github.com/LS-KS/Gantt-Maker/blob/main
 
 See example_usage.py to get an impression how to customize the diagram.
 
-![example_usage.py](https://github.com/LS-KS/Gantt-Maker/blob/main/example_usage.py)
+[example_usage.py](https://github.com/LS-KS/Gantt-Maker/blob/main/example_usage.py)
 
 ## Excel sheet format
 To make it actually work, your excel sheet must have the following columns:
@@ -55,7 +55,7 @@ To make it actually work, your excel sheet must have the following columns:
 
 I uploaded an example excel sheet in the folder example_data:
 
-![project_a.xlsx](https://github.com/LS-KS/Gantt-Maker/blob/main/example_data/project_a.xlsx)
+[project_a.xlsx](https://github.com/LS-KS/Gantt-Maker/blob/main/example_data/project_a.xlsx)
 
 ## Import statements
 

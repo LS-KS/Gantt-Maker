@@ -15,30 +15,15 @@ figure = ganttmaker.Figure()
 # set project start date
 figure.start_date = datetime.fromisoformat('2024-08-01').date()
 
-# set title and title properties
-figure.title = 'Project A'
-figure.title_font = QFont('Arial', 64)
-figure.render_metrics.title_height = 64
-figure.title_color = QColor(ganttmaker._colors[0])
-
-# set axis properties
-figure.axes_font = QFont('Arial', 24)
-figure.axes_color = QColor(ganttmaker._colors[0])
-figure.time_highlightline_color = QColor(ganttmaker._colors[0])
-figure.time_highlightline_width = (1, 5)
-
-# set box and background properties
-figure.box_color = QColor(QColor('transparent'))
-figure.background_color = QColor('transparent')
-
-# set legend properties
-figure.legend_font = QFont('Arial', 32)
-figure.legend_color = QColor(ganttmaker._colors[0])
-
 # define canvas size and export file
 figure.canvas_size = (2400, 1200)
 figure.render_metrics.legend_width = 620
 figure.export_file = 'example_data/project_a.png'
+
+# set title and title properties
+figure.title_properties.text = 'Project A'
+figure.title_properties.line_color = QColor(ganttmaker._colors[0])
+figure.title_properties.font = QFont('Arial', 64)
 
 # draw and save figure
 figure.draw(loader)

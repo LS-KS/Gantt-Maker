@@ -3,7 +3,7 @@ import sys
 import pandas as pd
 import os
 from PySide6.QtGui import QImage, QPainter, QPen, QFont, QGuiApplication, QColor, QBrush, QPainterPath
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject
 
 _units = {
     'pt': 1,  # 1 point is 1 point
@@ -29,6 +29,276 @@ class RenderMetrics:
     max_task_description_width: int = 200
     legend_width: int = 5
 
+
+class RenderElementProperties(QObject):
+
+    def __init__(self, parent=None):
+        """
+        Class that holds the properties of the box of the Gantt chart.
+        """
+        super().__init__(parent)
+        self._line_width: float = 2
+        self._line_color: QColor = QColor('black')
+        self._line_style: Qt.PenStyle = Qt.PenStyle.SolidLine
+        self._brush: QBrush = QBrush(QColor('transparent'))
+
+    @staticmethod
+    def penstyle_from_str(style: str) -> Qt.PenStyle:
+        if not isinstance(style, str):
+            raise TypeError("style must be a string")
+        match style:
+            case '-':
+                style = Qt.PenStyle.SolidLine
+            case '--':
+                style = Qt.PenStyle.DashLine
+            case '-.':
+                style = Qt.PenStyle.DashDotLine
+            case ':':
+                style = Qt.PenStyle.DotLine
+            case _:
+                raise ValueError("Unknown linestyle")
+        return style
+
+    @staticmethod
+    def brush_from_source(brush) -> QBrush:
+        try:
+            brush = QBrush(QColor(brush))
+        except ValueError:
+            raise ValueError("Unknown brush color")
+        return brush
+
+    @property
+    def line_width(self) -> float:
+        """
+        Property that holds the linewidth.
+
+        Returns:
+            int: linewidth
+        """
+        return self._line_width
+
+    @line_width.setter
+    def line_width(self, width: float):
+        if not isinstance(width, float):
+            raise TypeError("box_width must be a float")
+        if width < 0:
+            raise ValueError("box_width must be a positive float")
+        self._line_width = width
+
+    @property
+    def line_color(self) -> QColor:
+        """
+        Property that holds the color of the graph box border.
+
+        Returns:
+            QColor: box color
+        """
+        return self._line_color
+
+    @line_color.setter
+    def line_color(self, color: QColor):
+        if not isinstance(color, QColor):
+            raise TypeError("box_color must be a QColor object")
+        self._line_color = color
+
+    @property
+    def line_style(self) -> Qt.PenStyle:
+        """
+        Property that holds the linestyle of the graph box border.
+
+        Returns:
+            PenStyle: box penstyle
+        """
+        return self._line_style
+
+    @line_style.setter
+    def line_style(self, style: Qt.PenStyle | str):
+        if isinstance(style, str):
+            style = self.penstyle_from_str(style)
+        elif not isinstance(style, Qt.PenStyle):
+            raise TypeError("linestyle must be a Qt.PenStyle object")
+        self._line_style = style
+
+    @property
+    def brush(self) -> QBrush:
+        """
+        Property that holds the brush of the graph box.
+
+        Returns:
+            QBrush: box brush
+        """
+        return self._brush
+
+    @brush.setter
+    def brush(self, brush: QBrush | str):
+        if not isinstance(brush, QBrush):
+            try:
+                brush = self.brush_from_source(brush)
+            except ValueError:
+                raise TypeError("brush must be a QBrush object or convertible")
+        self._brush = brush
+
+    @property
+    def pen(self) -> QPen:
+        return QPen(self._line_color, self._line_width, self._line_style)
+
+    @property
+    def painter(self) -> QPainter:
+        """
+        Method that returns a QPainter object with the properties of the render_element.
+
+        Returns:
+            painter: QPainter object
+        """
+        painter = QPainter()
+        return painter
+
+
+class TaskProperties(RenderElementProperties):
+
+    def __init__(self):
+        super().__init__(None)
+        self._alpha_actual = 127
+        self._alpha_plan = 0
+        self._corner_radius = 0
+
+    @property
+    def corner_radius(self) -> float:
+        """
+        Property that holds the corner radius of the task box.
+
+        Returns:
+            float: corner radius
+        """
+        return self._corner_radius
+
+    @corner_radius.setter
+    def corner_radius(self, radius: float):
+        if not isinstance(radius, float):
+            raise TypeError("corner_radius must be a float")
+        self._corner_radius = radius
+
+    @property
+    def alpha_plan(self) -> int:
+        """
+        Property that holds the alpha value of the plan.
+
+        Returns:
+            int: alpha value
+        """
+        return self._alpha_plan
+
+    @property
+    def alpha_actual(self) -> int:
+        """
+        Property that holds the alpha value of the actual data.
+
+        Returns:
+            int: alpha value
+        """
+        return self._alpha_actual
+
+    @alpha_actual.setter
+    def alpha_actual(self, alpha: int):
+        if not isinstance(alpha, int):
+            raise TypeError("alpha_actual must be an integer")
+        if alpha < 0 or alpha > 255:
+            raise ValueError("alpha_actual must be between 0 and 255")
+        self._alpha_actual = alpha
+
+    @alpha_plan.setter
+    def alpha_plan(self, alpha: int):
+        if not isinstance(alpha, int):
+            raise TypeError("alpha_plan must be an integer")
+        if alpha < 0 or alpha > 255:
+            raise ValueError("alpha_plan must be between 0 and 255")
+        self._alpha_plan = alpha
+
+
+class FontProperties(RenderElementProperties):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._font = QFont('Arial', 12)
+        self._text = 'Gantt Chart'
+
+    @property
+    def font(self) -> QFont:
+        """
+            Property that holds the font of the text.
+
+            Returns:
+                QFont: font
+            """
+        return self._font
+
+    @font.setter
+    def font(self, font: QFont):
+        if not isinstance(font, QFont):
+            raise TypeError("font must be a QFont object")
+        self._font = font
+
+    @property
+    def text(self) -> str:
+        """
+            Property that holds the text.
+
+            Returns:
+                str: text
+            """
+        return self._text
+
+    @text.setter
+    def text(self, text: str):
+        try:
+            text = str(text)
+        except ValueError:
+            raise ValueError("text must be a string")
+        self._text = text
+
+class TitleProperties(FontProperties):
+    def __init__(self):
+        super().__init__(None)
+
+    @property
+    def font(self) -> QFont:
+        """
+            Property that holds the font of the text.
+
+            Returns:
+                QFont: font
+            """
+        return self._font
+
+    @font.setter
+    def font(self, font: QFont):
+        if not isinstance(font, QFont):
+            raise TypeError("font must be a QFont object")
+        self._font = font
+        fontsize = self._font.pointSize()
+        RenderMetrics.title_height = fontsize + 5
+
+class AxesProperties(FontProperties):
+    def __init__(self):
+        super().__init__(None)
+
+    @property
+    def font(self) -> QFont:
+        """
+            Property that holds the font of the text.
+
+            Returns:
+                QFont: font
+            """
+        return self._font
+
+    @font.setter
+    def font(self, font: QFont):
+        if not isinstance(font, QFont):
+            raise TypeError("font must be a QFont object")
+        self._font = font
+        fontsize = self._font.pointSize()
+        RenderMetrics.axis_height = fontsize * 2
 
 def validate_columns(data: pd.DataFrame):
     """
@@ -87,8 +357,6 @@ class Dataloader:
         data['Actual-Start'] = pd.to_datetime(data['Actual-Start'], format='%d.%m.%Y')
         data['Plan-End'] = pd.to_datetime(data['Plan-End'], format='%d.%m.%Y')
         data['Actual-End'] = pd.to_datetime(data['Actual-End'], format='%d.%m.%Y')
-        #data['Task'] = data['Task']
-        #data['Predecessor'] = data['Predecessor']
         self._data = data
 
     @property
@@ -144,149 +412,72 @@ class Figure:
 
             legend_color: QColor - color of the legend
         """
-        self._arrow_pen_width: float = 2.0
-        self._title_pen_width: float = 2.0
-        self._legend_pen_width = 2.0
-        self._axes_pen_width: float = 1.0
-        self._grid_pen_width: float = 0.5
-        self._title_color: QColor = QColor('black')
-        self._time_highlightline_width: tuple[float, float] = (0.75, 2.5)
-        self._time_highlightline_color: QColor = QColor('red')
+        self.arrow_properties: RenderElementProperties = RenderElementProperties()
+        self.arrow_properties.line_color = QColor('black')
+        self.arrow_properties.line_width = 2.0
+        self.arrow_properties.line_style = Qt.PenStyle.SolidLine
+        self.arrow_properties.brush = QBrush(QColor('black'))
+
+        self.title_properties: TitleProperties = TitleProperties()
+        self.title_properties.line_color = QColor('black')
+        self.title_properties.line_width = 2.0
+        self.title_properties.line_style = Qt.PenStyle.SolidLine
+        self.title_properties.brush = QBrush(QColor('black'))
+        self.title_properties.font = QFont('Arial', 64)
+
+        self.legend_properties: FontProperties = FontProperties()
+        self.legend_properties.line_color = QColor(_colors[0])
+        self.legend_properties.line_width = 2.0
+        self.legend_properties.line_style = Qt.PenStyle.SolidLine
+        self.legend_properties.brush = QBrush(QColor('black'))
+        self.legend_properties.font = QFont('Arial', 32)
+
+        self.box_properties: RenderElementProperties = TaskProperties()
+        self.box_properties.line_color = QColor(_colors[0])
+        self.box_properties.line_width = 2.0
+        self.box_properties.line_style = Qt.PenStyle.SolidLine
+        self.box_properties.brush = QBrush(QColor('transparent'))
+        self.box_properties.corner_radius = 1.0
+
+        self.grid_properties: RenderElementProperties = RenderElementProperties()
+        self.grid_properties.line_color = QColor('gray')
+        self.grid_properties.line_width = 0.5
+        self.grid_properties.line_style = Qt.PenStyle.DotLine
+        self.grid_properties.brush = QBrush(QColor('transparent'))
+
+        self.axes_properties: AxesProperties = AxesProperties()
+        self.axes_properties.line_color = QColor(_colors[0])
+        self.axes_properties.line_width = 1.0
+        self.axes_properties.line_style = Qt.PenStyle.SolidLine
+        self.axes_properties.brush = QBrush(QColor('transparent'))
+        self.axes_properties.font = QFont('Arial', 24)
+
+        self.week_highlight_properties: RenderElementProperties = RenderElementProperties()
+        self.week_highlight_properties.line_color = QColor(_colors[0])
+        self.week_highlight_properties.line_width = 0.75
+        self.week_highlight_properties.line_style = Qt.PenStyle.SolidLine
+        self.week_highlight_properties.brush = QBrush(QColor('transparent'))
+
+        self.month_highlight_properties: RenderElementProperties = RenderElementProperties()
+        self.month_highlight_properties.line_color = QColor(_colors[0])
+        self.month_highlight_properties.line_width = 2.5
+        self.month_highlight_properties.line_style = Qt.PenStyle.SolidLine
+        self.month_highlight_properties.brush = QBrush(QColor('transparent'))
+
+        self.task_properties: TaskProperties = TaskProperties()
+        self.task_properties.line_color = QColor(_colors[0])
+        self.task_properties.line_width = 2.0
+        self.task_properties.line_style = Qt.PenStyle.SolidLine
+        self.task_properties.brush = QBrush(QColor(_colors[0]))
+        self.task_properties.corner_radius = 1.0
+
         self._background_color: QColor = QColor('transparent')
-        self._axes_color: QColor = QColor('black')
-        self._task_line_width: float = 4.0
-        self._task_brush_saturation: int = 127
-        self._box_width: int = 2
-        self._box_color: QColor = QColor('black')
         self._export_file: str | None = None
         self._start_date: datetime.date | None = None
         self._canvas_size: tuple[int, int] | None = None
         self._unit: float = _units['px']
         self._loader: 'Dataloader' | None = None
         self.render_metrics: RenderMetrics = RenderMetrics()
-        self.title: str = "Gantt Chart"
-        self._axes_font = QFont("Arial", 10)
-        self._title_font = QFont("Arial", 24)
-        self._legend_font = QFont("Arial", 12)
-        self._legend_color = QColor('black')
-
-    @property
-    def title_pen_width(self) -> float:
-        """
-        Property that holds the width of the title lines.
-
-        Returns:
-            float: width of the title lines
-        """
-        return self._title_pen_width
-
-    @title_pen_width.setter
-    def title_pen_width(self, width: float):
-        if not isinstance(width, float):
-            raise TypeError("title_pen_width must be a float")
-        elif width < 0:
-            raise ValueError("title_pen_width must be a positive float")
-        self._title_pen_width = width
-
-    @property
-    def arrow_pen_width(self) -> float:
-        """
-        Property that holds the width of the arrow lines.
-
-        Returns:
-            float: width of the arrow lines
-        """
-        return self._arrow_pen_width
-
-    @arrow_pen_width.setter
-    def arrow_pen_width(self, width: float):
-        if not isinstance(width, float):
-            raise TypeError("arrow_pen_width must be a float")
-        elif width < 0:
-            raise ValueError("arrow_pen_width must be a positive float")
-        self._arrow_pen_width = width
-    @property
-    def legend_pen_width(self) -> float:
-        """
-        Property that holds the width of the legend lines.
-
-        Returns:
-            float: width of the legend lines
-        """
-        return self._legend_pen_width
-
-    @legend_pen_width.setter
-    def legend_pen_width(self, width: float):
-        if not isinstance(width, float):
-            raise TypeError("legend_pen_width must be a float")
-        elif width < 0:
-            raise ValueError("legend_pen_width must be a positive float")
-        self._legend_pen_width = width
-
-    @property
-    def axes_pen_width(self) -> float:
-        """
-        Property that holds the width of the axes lines.
-
-        Returns:
-            float: width of the axes lines
-        """
-        return self._axes_pen_width
-
-    @axes_pen_width.setter
-    def axes_pen_width(self, width: float):
-        if not isinstance(width, float):
-            raise TypeError("axes_pen_width must be a float")
-        elif width < 0:
-            raise ValueError("axes_pen_width must be a positive float")
-        self._axes_pen_width = width
-
-    @property
-    def grid_pen_width(self) -> float:
-        """
-        Property that holds the width of the grid lines.
-
-        Returns:
-            float: width of the grid lines
-        """
-        return self._grid_pen_width
-
-    @grid_pen_width.setter
-    def grid_pen_width(self, width: float):
-        if not isinstance(width, float):
-            raise TypeError("grid_pen_width must be a float")
-        elif width < 0:
-            raise ValueError("grid_pen_width must be a positive float")
-        self._grid_pen_width = width
-
-    @property
-    def time_highlightline_width(self) -> tuple[float, float]:
-        """
-        Property that holds the width of the time highlight lines.
-        First element is the line width to highlight the beginning of the week, second for beginning of the month.
-        """
-        return self._time_highlightline_width
-
-    @time_highlightline_width.setter
-    def time_highlightline_width(self, width: tuple[int, int]):
-        if not isinstance(width, tuple):
-            raise TypeError("time_highlightline_width must be a tuplpe of floats")
-        elif len(width) != 2:
-            raise ValueError("time_highlightline_width must be a tuple of two floats")
-        self._time_highlightline_width = width
-
-    @property
-    def time_highlightline_color(self) -> QColor:
-        """
-        Property that holds the color of the time highlight lines.
-        """
-        return self._time_highlightline_color
-
-    @time_highlightline_color.setter
-    def time_highlightline_color(self, color: QColor):
-        if not isinstance(color, QColor):
-            raise TypeError("time_highlightline_color must be a QColor object")
-        self._time_highlightline_color = color
 
     @property
     def background_color(self) -> QColor:
@@ -303,168 +494,6 @@ class Figure:
         if not isinstance(color, QColor):
             raise TypeError("background_color must be a QColor object")
         self._background_color = color
-
-    @property
-    def axes_color(self) -> QColor:
-        """
-        Property that holds the color of the ax annotations.
-
-        Returns:
-            QColor: axes color
-        """
-        return self._axes_color
-
-    @axes_color.setter
-    def axes_color(self, color: QColor):
-        if not isinstance(color, QColor):
-            raise TypeError("axes_color must be a QColor object")
-        self._axes_color = color
-
-    @property
-    def axes_font(self) -> QFont:
-        """
-        Property that holds the font of the ax annotations.
-
-        Returns:
-            QFont: axes font
-        """
-        return self._axes_font
-
-    @axes_font.setter
-    def axes_font(self, font: QFont):
-        if not isinstance(font, QFont):
-            raise TypeError("axes_font must be a QFont object")
-        self._axes_font = font
-
-    @property
-    def task_brush_saturation(self) -> int:
-        """
-        Property that holds the saturation of the task brush.
-
-        Returns:
-            float: task brush saturation
-        """
-        return self._task_brush_saturation
-
-    @task_brush_saturation.setter
-    def task_brush_saturation(self, saturation: int):
-        if not isinstance(saturation, int):
-            raise TypeError("task_brush_saturation must be an integer")
-        elif saturation < 0 or saturation > 255:
-            raise ValueError("task_brush_saturation must be between 0 and 255")
-        self._task_brush_saturation = saturation
-
-    @property
-    def task_line_width(self) -> float:
-        """
-        Property that holds the width of the task lines.
-
-        Returns:
-            int: task line width
-        """
-        return self._task_line_width
-
-    @task_line_width.setter
-    def task_line_width(self, width: int):
-        if not isinstance(width, int):
-            raise TypeError("task_line_width must be an integer")
-        self._task_line_width = width
-
-    @property
-    def box_width(self):
-        """
-        Property that holds the width of the graph box.
-
-        Returns:
-            int: box width
-        """
-        return self._box_width
-
-    @box_width.setter
-    def box_width(self, width: int):
-        if not isinstance(width, int):
-            raise TypeError("box_width must be an integer")
-        self._box_width = width
-
-    @property
-    def box_color(self) -> QColor:
-        """
-        Property that holds the color of the graph box.
-
-        Returns:
-            QColor: box color
-        """
-        return self._box_color
-
-    @box_color.setter
-    def box_color(self, color: QColor):
-        if not isinstance(color, QColor):
-            raise TypeError("box_color must be a QColor object")
-        self._box_color = color
-
-    @property
-    def legend_color(self) -> QColor:
-        """
-        Property that holds the color of the legend.
-
-        Returns:
-            QColor: legend color
-        """
-        return self._legend_color
-
-    @legend_color.setter
-    def legend_color(self, color: QColor):
-        if not isinstance(color, QColor):
-            raise TypeError("legend_color must be a QColor object")
-        self._legend_color = color
-
-    @property
-    def legend_font(self) -> QFont:
-        """
-        Property that holds the font of the legend.
-
-        Returns:
-            QFont: legend font
-        """
-        return self._legend_font
-
-    @legend_font.setter
-    def legend_font(self, font: QFont):
-        if not isinstance(font, QFont):
-            raise TypeError("legend_font must be a QFont object")
-        self._legend_font = font
-
-    @property
-    def title_font(self) -> QFont:
-        """
-        Property that holds the font of the title.
-
-        Returns:
-            QFont: title font
-        """
-        return self._title_font
-
-    @title_font.setter
-    def title_font(self, font: QFont):
-        if not isinstance(font, QFont):
-            raise TypeError("title_font must be a QFont object")
-        self._title_font = font
-
-    @property
-    def title_color(self) -> QColor:
-        """
-        Property that holds the color of the title.
-
-        Returns:
-            QColor: title color
-        """
-        return self._title_color
-
-    @title_color.setter
-    def title_color(self, color: QColor):
-        if not isinstance(color, QColor):
-            raise TypeError("title_color must be a QColor object")
-        self._title_color = color
 
     @property
     def start_date(self) -> datetime.date:
@@ -588,33 +617,20 @@ class Figure:
         image = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         image.fill(self.background_color)
 
-        # painter initialization
-        painter = QPainter()
-
-        # pen initialization
-        box_pen = QPen(self._box_color, self.box_width, Qt.PenStyle.SolidLine)
-        grid_pen = QPen(Qt.GlobalColor.gray, self.grid_pen_width, Qt.PenStyle.DotLine)
-        axes_pen = QPen(self.axes_color, self.axes_pen_width, Qt.PenStyle.SolidLine)
-        legend_pen = QPen(self.legend_color, self.legend_pen_width, Qt.PenStyle.SolidLine)
-        graph_pen = QPen(Qt.GlobalColor.blue, self.task_line_width, Qt.PenStyle.SolidLine)
-        title_pen = QPen(self.title_color, self.title_pen_width, Qt.PenStyle.SolidLine)
-        arrow_pen = QPen(Qt.GlobalColor.black, self.arrow_pen_width, Qt.PenStyle.SolidLine)
-
         # draw image layers
-        box_layer = self.draw_box_layer(box_pen, figure_start, figure_width, figure_height, painter)
-        box_layer = self.draw_title(box_layer, painter, title_pen, self.title)
-        box_layer = self.draw_legend(box_layer, painter, legend_pen, figure_start, task_height, self.legend_font)
-        grid_layer = self.draw_grid_layer(figure_start, grid_pen, painter, task_width, task_height, figure_width, 'Plan-End')
-        grid_layer = self.draw_monday_lines(grid_layer, figure_start, painter, task_width, 'Plan-End')
-        graph_layer = self.draw_tasks(figure_start, graph_pen, self.task_brush_saturation, painter, task_height,
-                                      task_width, 'Plan-Start', 'Plan-End')
-        actual_layer = self.draw_tasks(figure_start, graph_pen, self.task_brush_saturation, painter, task_height,
-                                       task_width, 'Actual-Start', 'Actual-End', plan=False)
-        axes_layer = self.draw_xaxis(figure_start, figure_height, task_width, painter, axes_pen, self.axes_font, 'Plan-End')
+        box_layer = self.draw_box_layer(figure_start, figure_width, figure_height)
+        box_layer = self.draw_title(box_layer)
+        box_layer = self.draw_legend(box_layer, figure_start, task_height)
+        grid_layer = self.draw_grid_layer(figure_start, task_width, task_height, figure_width, 'Plan-End')
+        grid_layer = self.draw_monday_lines(grid_layer, figure_start, task_width, 'Plan-End')
+        graph_layer = self.draw_tasks(figure_start, task_height, task_width, 'Plan-Start', 'Plan-End')
+        actual_layer = self.draw_tasks(figure_start, task_height, task_width, 'Actual-Start', 'Actual-End', plan=False)
+        axes_layer = self.draw_xaxis(figure_start, figure_height, task_width,'Plan-End')
 
-        arrows_layer = self.draw_arrows(figure_start, task_width, task_height, painter, arrow_pen)
+        arrows_layer = self.draw_arrows(figure_start, task_width, task_height)
 
         # combine all layers
+        painter = QPainter()
         painter.begin(image)
         painter.drawImage(0, 0, box_layer)
         painter.drawImage(0, 0, grid_layer)
@@ -627,7 +643,7 @@ class Figure:
         # save image
         image.save(self.export_file)
 
-    def draw_arrows(self, start, t_width, t_height, painter, pen):
+    def draw_arrows(self, start, t_width, t_height):
         """
         Method that draws arrows at the end of each task.
 
@@ -635,32 +651,38 @@ class Figure:
             start: tuple[int, int], starting point of the figure
             t_width: int, width of a task
             t_height: int, height of a task
-            painter: QPainter object (painting device)
-            pen: QPen object, pen for the arrows
         """
 
         arrowslayer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
+        painter = self.arrow_properties.painter
         painter.begin(arrowslayer)
-        for i, task in enumerate(self._loader._data.itertuples()):
+        painter.setPen(self.arrow_properties.pen)
+        painter.setBrush(self.arrow_properties.brush)
+        for i, task in enumerate(self._loader.data.itertuples()):
             predecessors: list = str(self._loader.data['Predecessor'].loc[i]).split(';')
             if predecessors[0] != 'nan':
                 # print(predecessors)
                 for j, pred in enumerate(predecessors):
-                    record = self._loader._data[self._loader._data['Task'] == pred]
+                    record = self._loader.data[self._loader.data['Task'] == pred]
                     start_date = record['Actual-End'].iloc[0].date()
-                    end_date = self._loader._data['Actual-Start'][i].date()
-                    x_start = ((start_date - self.start_date).days + 1) * t_width + start[0] + self.render_metrics.horizontal_padding - t_width/2
+                    end_date = self._loader.data['Actual-Start'][i].date()
+                    x_start = ((start_date - self.start_date).days + 1) * t_width + start[
+                        0] + self.render_metrics.horizontal_padding - t_width / 2
                     pred_idx = self._loader.data.index[self._loader.data['Task'] == pred].tolist()[0]
-                    y_start = start[1] + self.render_metrics.vertical_padding + pred_idx*t_height + t_height/2
+                    y_start = start[1] + self.render_metrics.vertical_padding + pred_idx * t_height + t_height / 2
                     if start_date == end_date:
-                        x_end = (end_date - self.start_date).days * t_width + start[0] + self.render_metrics.horizontal_padding + t_width/2
+                        x_end = (end_date - self.start_date).days * t_width + start[
+                            0] + self.render_metrics.horizontal_padding + t_width / 2
                     else:
-                        x_end = (end_date - self.start_date).days * t_width + start[0] + self.render_metrics.horizontal_padding
+                        x_end = (end_date - self.start_date).days * t_width + start[
+                            0] + self.render_metrics.horizontal_padding
                     if len(predecessors) > 1:
-                        y_end = start[1] + self.render_metrics.vertical_padding + i*t_height + j * (t_height / len(predecessors)) + (t_height / len(predecessors))/2
+                        y_end = start[1] + self.render_metrics.vertical_padding + i * t_height + j * (
+                                t_height / len(predecessors)) + (t_height / len(predecessors)) / 2
                     else:
-                        y_end = start[1] + self.render_metrics.vertical_padding + i*t_height + t_height/2
+                        y_end = start[1] + self.render_metrics.vertical_padding + i * t_height + t_height / 2
                     circle = 0.1 * t_height
+                    pen = painter.pen()
                     pen.setColor(QColor(_colors[pred_idx % len(_colors)]))
                     brush = QBrush(pen.color())
                     painter.setBrush(brush)
@@ -669,8 +691,8 @@ class Figure:
                     # define arrow head
                     arrow_head = QPainterPath()
                     if start_date == end_date:
-                        arrow_head.moveTo(x_end - circle / 2, y_end - circle*2)
-                        arrow_head.lineTo(x_end + circle / 2, y_end - circle*2)
+                        arrow_head.moveTo(x_end - circle / 2, y_end - circle * 2)
+                        arrow_head.lineTo(x_end + circle / 2, y_end - circle * 2)
                         arrow_head.lineTo(x_end, y_end)
                         arrow_head.closeSubpath()
                     else:
@@ -680,7 +702,7 @@ class Figure:
                         arrow_head.closeSubpath()
 
                     # starting dot
-                    painter.drawEllipse(x_start - circle/2, y_start - circle/2, circle, circle)
+                    painter.drawEllipse(x_start - circle / 2, y_start - circle / 2, circle, circle)
 
                     # connection lines
                     painter.drawLine(x_start, y_start, x_start, y_end)
@@ -689,38 +711,43 @@ class Figure:
                     # arrow head
                     painter.drawPath(arrow_head)
 
-
         painter.end()
         return arrowslayer
 
-    def draw_monday_lines(self, layer, figure_start, painter, task_width, column):
+    def draw_monday_lines(self, layer, figure_start, task_width, column):
         """
         Method that draws vertical lines at the beginning of each week and month.
 
         Parameters:
             layer: QImage object where the lines are drawn
             figure_start: tuple[int, int], starting point of the figure
-            painter: QPainter object (painting device)
             task_width: int that defines the width of a task
             column: str, column of the data to be drawn
         """
-        monday_pen = QPen(self.time_highlightline_color, self.time_highlightline_width[0], Qt.PenStyle.SolidLine)
-        monthly_pen = QPen(self.time_highlightline_color, self.time_highlightline_width[1], Qt.PenStyle.SolidLine)
-        painter.begin(layer)
+        monday_painter = self.week_highlight_properties.painter
+        monthly_painter = self.month_highlight_properties.painter
+        monday_painter.begin(layer)
+        monday_painter.setPen(self.week_highlight_properties.pen)
+        monday_painter.setBrush(self.week_highlight_properties.brush)
         dates = (self._loader.data[column].max().date() - self.start_date).days + 1
         for i in range(dates):
-            x = int(figure_start[0] + i * task_width + self.render_metrics.horizontal_padding)
             if (self.start_date + datetime.timedelta(days=i)).weekday() == 0:
-                painter.setPen(monday_pen)
-                painter.drawLine(x, figure_start[1], x, self.canvas_size[1] - self.render_metrics.vertical_padding)
+                x = int(figure_start[0] + i * task_width + self.render_metrics.horizontal_padding)
+                monday_painter.drawLine(x, figure_start[1], x,
+                                        self.canvas_size[1] - self.render_metrics.vertical_padding)
+        monday_painter.end()
+        monthly_painter.begin(layer)
+        monthly_painter.setPen(self.month_highlight_properties.pen)
+        monthly_painter.setBrush(self.month_highlight_properties.brush)
+        for i in range(dates):
             if (self.start_date + datetime.timedelta(days=i)).day == 1:
-                painter.setPen(monthly_pen)
-                painter.drawLine(x, figure_start[1] - self.render_metrics.axis_height, x,
-                                 self.canvas_size[1] - self.render_metrics.vertical_padding)
-        painter.end()
+                x = int(figure_start[0] + i * task_width + self.render_metrics.horizontal_padding)
+                monthly_painter.drawLine(x, figure_start[1] - self.render_metrics.axis_height, x,
+                                         self.canvas_size[1] - self.render_metrics.vertical_padding)
+        monthly_painter.end()
         return layer
 
-    def draw_xaxis(self, start, height, task_width, painter, pen, font, column):
+    def draw_xaxis(self, start, height, task_width, column):
         """
         Method that draws the x-axis of the Gantt chart.
 
@@ -728,34 +755,33 @@ class Figure:
             start: tuple[int, int], starting point of the figure
             height: int, height of the figure
             task_width: int, width of a task
-            painter: QPainter object (painting device)
-            pen: QPen object, pen for the axes
-            font: QFont object, font for the axes
             column: str, column of the data to be drawn
         """
+        painter = self.axes_properties.painter
         axes_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         painter.begin(axes_layer)
-        painter.setPen(pen)
-        painter.setFont(font)
-        dates = (self._loader._data[column].max().date() - self.start_date).days + 1
+        painter.setPen(self.axes_properties.pen)
+        painter.setBrush(self.axes_properties.brush)
+        painter.setFont(self.axes_properties.font)
+        dates = (self._loader.data[column].max().date() - self.start_date).days + 1
         for i in range(dates):
             x = int(start[0]
                     + i * task_width
                     + self.render_metrics.horizontal_padding
                     )
-            y = start[1] + height + self.render_metrics.vertical_padding
+            y = self.canvas_size[1] - self.render_metrics.vertical_padding - self.render_metrics.axis_height//2
             date = self.start_date + datetime.timedelta(days=i)
             text = date.strftime('%A')[0:2]
             day_text = date.strftime('%d')
             painter.drawText(
                 x, y,
-                task_width, self.render_metrics.axis_height,
-                Qt.AlignmentFlag.AlignCenter,
+                task_width, self.render_metrics.axis_height//2,
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
                 text
             )
             painter.drawText(
-                x, y - self.render_metrics.axis_height - self.render_metrics.axis_padding,
-                task_width, self.render_metrics.axis_height + self.render_metrics.axis_padding,
+                x, y - self.render_metrics.axis_height//2 - self.render_metrics.axis_padding,
+                task_width, self.render_metrics.axis_height//2 + self.render_metrics.axis_padding,
                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
                 day_text
             )
@@ -784,37 +810,38 @@ class Figure:
 
         return axes_layer
 
-    def draw_tasks(self, figure_start: tuple[int, int], task_pen: QPen, brush_saturation: int, painter: QPainter,
-                   task_height: int, task_width: int, start_column, end_column, plan=True):
+    def draw_tasks(self, figure_start: tuple[int, int], task_height: int, task_width: int, start_column, end_column, plan=True):
         """
         Method that draws the tasks of the Gantt chart.
 
         Parameters:
             figure_start: tuple[int, int], starting point of the figure
-            task_pen: QPen object, pen for the tasks
-            brush_saturation: int, saturation of the task brush
-            painter: QPainter object (painting device)
             task_height: int, height of a task
             task_width: int, width of a task
+            start_column: str, column of the data to be drawn
+            end_column: str, column of the data to be drawn
+            plan: bool, if True, the plan is drawn, if False, the actual data is drawn
         """
+        painter = self.task_properties.painter
         graph_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         painter.begin(graph_layer)
+        painter.setPen(self.task_properties.pen)
+        painter.setBrush(self.task_properties.brush)
         self.set_painter_renderoptions(painter)
-
-        painter.setPen(task_pen)
-        for i, task in enumerate(self._loader._data.itertuples()):
-            painter.setPen(QColor(_colors[i % len(_colors)]))
+        for i, task in enumerate(self._loader.data.itertuples()):
+            pen = painter.pen()
+            pen.setColor(QColor(_colors[i % len(_colors)]))
+            painter.setPen(pen)
             brush_color = QColor(_colors[i % len(_colors)])
             if plan:
-                brush_color.setAlpha(0)
-                pen = painter.pen()
-                painter.setPen(pen)
+                brush_color.setAlpha(self.task_properties.alpha_plan)
             else:
-                brush_color.setAlpha(brush_saturation)
-            task_brush = QBrush(brush_color)
-            painter.setBrush(task_brush)
-            plan_start = self._loader._data[start_column][i].date()
-            plan_end = self._loader._data[end_column][i].date()
+                brush_color.setAlpha(self.task_properties.alpha_actual)
+            brush = painter.brush()
+            brush.setColor(brush_color)
+            painter.setBrush(brush)
+            plan_start = self._loader.data[start_column][i].date()
+            plan_end = self._loader.data[end_column][i].date()
             x_start = figure_start[0] + task_width * (
                     plan_start - self.start_date).days + self.render_metrics.horizontal_padding
             x_end = figure_start[0] + task_width * (
@@ -825,54 +852,53 @@ class Figure:
         painter.end()
         return graph_layer
 
-    def draw_grid_layer(self, figure_start, grid_pen, painter, task_width, task_height, figure_width, column):
+    def draw_grid_layer(self, figure_start, task_width, task_height, figure_width, column):
         """
         Method that draws the grid of the Gantt chart.
 
         Parameters:
             figure_start: tuple[int, int], starting point of the figure
-            grid_pen: QPen object, pen for the grid
-            painter: QPainter object (painting device)
             task_width: int, width of a task
             task_height: int, height of a task
             figure_width: int, width of the figure
             column: str, column of the data to be drawn
         """
         grid_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
+        painter = self.grid_properties.painter
         painter.begin(grid_layer)
+        painter.setPen(self.grid_properties.pen)
+        painter.setBrush(self.grid_properties.brush)
         self.set_painter_renderoptions(painter)
-        painter.setPen(grid_pen)
 
         # draw vertical lines
-        for i in range((self._loader._data[column].max().date() - self.start_date).days + 2):
+        for i in range((self._loader.data[column].max().date() - self.start_date).days + 2):
             x = figure_start[0] + i * task_width + self.render_metrics.horizontal_padding
             painter.drawLine(x, figure_start[1], x, self.canvas_size[1] - self.render_metrics.vertical_padding)
 
         # draw horizontal lines
-        for i in range(len(self._loader._data) + 1):
+        for i in range(len(self._loader.data) + 1):
             y = figure_start[1] + self.render_metrics.vertical_padding + i * task_height
             painter.drawLine(
                 figure_start[0] - self.render_metrics.legend_width, y,
                 figure_start[0] + figure_width, y)
-
         painter.end()
         return grid_layer
 
-    def draw_box_layer(self, box_pen, figure_start, width, height, painter):
+    def draw_box_layer(self, figure_start, width, height):
         """
         Method that draws the box of the Gantt chart.
 
         Parameters:
-            box_pen: QPen object, pen for the box
             figure_start: tuple[int, int], starting point of the figure
             width: int, width of the box
             height: int, height of the box
-            painter: QPainter object (painting device)
         """
+        painter = self.box_properties.painter
         box_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         painter.begin(box_layer)
+        painter.setPen(self.box_properties.pen)
+        painter.setBrush(self.box_properties.brush)
         self.set_painter_renderoptions(painter)
-        painter.setPen(box_pen)
         # draw figure box
         painter.drawRect(
             figure_start[0],
@@ -883,47 +909,45 @@ class Figure:
         painter.end()
         return box_layer
 
-    def draw_title(self, box_layer, painter, title_pen, title: str = "Gantt Chart"):
+    def draw_title(self, box_layer):
         """
         Method that draws the title of the Gantt chart.
 
         Parameters:
             box_layer: QImage object where the title is drawn
-            painter: QPainter object (painting device)
-            title_pen: QPen object, pen for the title
-            title: str, title of the Gantt chart
         """
+        painter = self.title_properties.painter
         painter.begin(box_layer)
+        painter.setPen(self.title_properties.pen)
+        painter.setFont(self.title_properties.font)
+        painter.setBrush(self.title_properties.brush)
         self.set_painter_renderoptions(painter)
-        painter.setPen(title_pen)
-        painter.setFont(self.title_font)
         painter.drawText(
             0,
             self.render_metrics.title_padding,
             self.canvas_size[0],
             self.render_metrics.title_height,
             Qt.AlignmentFlag.AlignCenter,
-            title)
+            self.title_properties.text)
         painter.end()
         return box_layer
 
-    def draw_legend(self, box_layer, painter, pen, figure_start, task_height, font):
+    def draw_legend(self, box_layer, figure_start, task_height):
         """
         Method that draws the legend of the Gantt chart.
 
         Parameters:
             box_layer: QImage object where the legend is drawn
-            painter: QPainter object (painting device)
-            pen: QPen object, pen for the legend
             figure_start: tuple[int, int], starting point of the figure
             task_height: int, height of a task
-            font: QFont object, font for the legend
         """
+        painter = self.legend_properties.painter
         painter.begin(box_layer)
+        painter.setPen(self.legend_properties.pen)
+        painter.setBrush(self.legend_properties.brush)
+        painter.setFont(self.legend_properties.font)
         self.set_painter_renderoptions(painter)
-        painter.setPen(pen)
-        painter.setFont(font)
-        for i, task in enumerate(self._loader._data.itertuples()):
+        for i, task in enumerate(self._loader.data.itertuples()):
             y = figure_start[1] + self.render_metrics.vertical_padding + i * task_height
             x = self.render_metrics.horizontal_padding
             painter.drawText(
@@ -932,7 +956,7 @@ class Figure:
                 self.render_metrics.legend_width,
                 task_height,
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                self._loader._data['Task'][i] + ": " + self._loader._data['Description'][i],
+                self._loader.data['Task'][i] + ": " + self._loader.data['Description'][i],
             )
         painter.end()
         return box_layer
@@ -941,7 +965,7 @@ class Figure:
         if self.canvas_size is None:
             raise ValueError("canvas_size not set")
         height -= 2 * self.render_metrics.vertical_padding
-        num_tasks = len(self._loader._data)
+        num_tasks = len(self._loader.data)
         if int(height / num_tasks) < self.render_metrics.min_task_height:
             raise ValueError("Canvas too small for all tasks or RenderMetrics inappropriately set")
         return int(height / num_tasks)
@@ -950,7 +974,7 @@ class Figure:
         if self.canvas_size is None:
             raise ValueError("canvas_size not set")
         av_width = width - 2 * self.render_metrics.horizontal_padding
-        time_span = self._loader._data['Plan-End'].max().date() - self.start_date
+        time_span = self._loader.data['Plan-End'].max().date() - self.start_date
         time_span = int(time_span.days)
         if int(av_width / time_span) < 1:
             raise ValueError("Canvas too small for all tasks or RenderMetrics inappropriately set")
@@ -968,4 +992,3 @@ class Figure:
              + self.render_metrics.axis_height
              )
         return x, y
-

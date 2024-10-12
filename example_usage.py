@@ -1,6 +1,5 @@
 from datetime import datetime
 from PySide6.QtGui import QFont, QColor
-
 import ganttmaker
 
 # define file path to Excel sheet

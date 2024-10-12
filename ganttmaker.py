@@ -2,7 +2,7 @@ import datetime
 import sys
 import pandas as pd
 import os
-from PySide6.QtGui import QImage, QPainter, QPen, QFont, QGuiApplication, QColor, QBrush
+from PySide6.QtGui import QImage, QPainter, QPen, QFont, QGuiApplication, QColor, QBrush, QPainterPath
 from PySide6.QtCore import Qt
 
 _units = {
@@ -87,8 +87,8 @@ class Dataloader:
         data['Actual-Start'] = pd.to_datetime(data['Actual-Start'], format='%d.%m.%Y')
         data['Plan-End'] = pd.to_datetime(data['Plan-End'], format='%d.%m.%Y')
         data['Actual-End'] = pd.to_datetime(data['Actual-End'], format='%d.%m.%Y')
-        data['Task'] = data['Task']
-        data['Predecessor'] = data['Predecessor']
+        #data['Task'] = data['Task']
+        #data['Predecessor'] = data['Predecessor']
         self._data = data
 
     @property
@@ -144,6 +144,11 @@ class Figure:
 
             legend_color: QColor - color of the legend
         """
+        self._arrow_pen_width: float = 2.0
+        self._title_pen_width: float = 2.0
+        self._legend_pen_width = 2.0
+        self._axes_pen_width: float = 1.0
+        self._grid_pen_width: float = 0.5
         self._title_color: QColor = QColor('black')
         self._time_highlightline_width: tuple[float, float] = (0.75, 2.5)
         self._time_highlightline_color: QColor = QColor('red')
@@ -164,6 +169,95 @@ class Figure:
         self._title_font = QFont("Arial", 24)
         self._legend_font = QFont("Arial", 12)
         self._legend_color = QColor('black')
+
+    @property
+    def title_pen_width(self) -> float:
+        """
+        Property that holds the width of the title lines.
+
+        Returns:
+            float: width of the title lines
+        """
+        return self._title_pen_width
+
+    @title_pen_width.setter
+    def title_pen_width(self, width: float):
+        if not isinstance(width, float):
+            raise TypeError("title_pen_width must be a float")
+        elif width < 0:
+            raise ValueError("title_pen_width must be a positive float")
+        self._title_pen_width = width
+
+    @property
+    def arrow_pen_width(self) -> float:
+        """
+        Property that holds the width of the arrow lines.
+
+        Returns:
+            float: width of the arrow lines
+        """
+        return self._arrow_pen_width
+
+    @arrow_pen_width.setter
+    def arrow_pen_width(self, width: float):
+        if not isinstance(width, float):
+            raise TypeError("arrow_pen_width must be a float")
+        elif width < 0:
+            raise ValueError("arrow_pen_width must be a positive float")
+        self._arrow_pen_width = width
+    @property
+    def legend_pen_width(self) -> float:
+        """
+        Property that holds the width of the legend lines.
+
+        Returns:
+            float: width of the legend lines
+        """
+        return self._legend_pen_width
+
+    @legend_pen_width.setter
+    def legend_pen_width(self, width: float):
+        if not isinstance(width, float):
+            raise TypeError("legend_pen_width must be a float")
+        elif width < 0:
+            raise ValueError("legend_pen_width must be a positive float")
+        self._legend_pen_width = width
+
+    @property
+    def axes_pen_width(self) -> float:
+        """
+        Property that holds the width of the axes lines.
+
+        Returns:
+            float: width of the axes lines
+        """
+        return self._axes_pen_width
+
+    @axes_pen_width.setter
+    def axes_pen_width(self, width: float):
+        if not isinstance(width, float):
+            raise TypeError("axes_pen_width must be a float")
+        elif width < 0:
+            raise ValueError("axes_pen_width must be a positive float")
+        self._axes_pen_width = width
+
+    @property
+    def grid_pen_width(self) -> float:
+        """
+        Property that holds the width of the grid lines.
+
+        Returns:
+            float: width of the grid lines
+        """
+        return self._grid_pen_width
+
+    @grid_pen_width.setter
+    def grid_pen_width(self, width: float):
+        if not isinstance(width, float):
+            raise TypeError("grid_pen_width must be a float")
+        elif width < 0:
+            raise ValueError("grid_pen_width must be a positive float")
+        self._grid_pen_width = width
 
     @property
     def time_highlightline_width(self) -> tuple[float, float]:
@@ -491,7 +585,6 @@ class Figure:
         task_height: int = self._define_task_height(figure_height)
         task_width: int = self._define_task_width(figure_width)
 
-        arrows_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         image = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         image.fill(self.background_color)
 
@@ -500,12 +593,12 @@ class Figure:
 
         # pen initialization
         box_pen = QPen(self._box_color, self.box_width, Qt.PenStyle.SolidLine)
-        grid_pen = QPen(Qt.GlobalColor.gray, 0.5, Qt.PenStyle.DotLine)
-        axes_pen = QPen(self.axes_color, 2, Qt.PenStyle.SolidLine)
-        legend_pen = QPen(self.legend_color, 2, Qt.PenStyle.SolidLine)
+        grid_pen = QPen(Qt.GlobalColor.gray, self.grid_pen_width, Qt.PenStyle.DotLine)
+        axes_pen = QPen(self.axes_color, self.axes_pen_width, Qt.PenStyle.SolidLine)
+        legend_pen = QPen(self.legend_color, self.legend_pen_width, Qt.PenStyle.SolidLine)
         graph_pen = QPen(Qt.GlobalColor.blue, self.task_line_width, Qt.PenStyle.SolidLine)
-        title_pen = QPen(self.title_color, 2, Qt.PenStyle.SolidLine)
-        arrows_pen = QPen(Qt.GlobalColor.black, 2, Qt.PenStyle.SolidLine)
+        title_pen = QPen(self.title_color, self.title_pen_width, Qt.PenStyle.SolidLine)
+        arrow_pen = QPen(Qt.GlobalColor.black, self.arrow_pen_width, Qt.PenStyle.SolidLine)
 
         # draw image layers
         box_layer = self.draw_box_layer(box_pen, figure_start, figure_width, figure_height, painter)
@@ -519,6 +612,8 @@ class Figure:
                                        task_width, 'Actual-Start', 'Actual-End', plan=False)
         axes_layer = self.draw_xaxis(figure_start, figure_height, task_width, painter, axes_pen, self.axes_font, 'Plan-End')
 
+        arrows_layer = self.draw_arrows(figure_start, task_width, task_height, painter, arrow_pen)
+
         # combine all layers
         painter.begin(image)
         painter.drawImage(0, 0, box_layer)
@@ -531,6 +626,72 @@ class Figure:
 
         # save image
         image.save(self.export_file)
+
+    def draw_arrows(self, start, t_width, t_height, painter, pen):
+        """
+        Method that draws arrows at the end of each task.
+
+        Parameters:
+            start: tuple[int, int], starting point of the figure
+            t_width: int, width of a task
+            t_height: int, height of a task
+            painter: QPainter object (painting device)
+            pen: QPen object, pen for the arrows
+        """
+
+        arrowslayer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
+        painter.begin(arrowslayer)
+        for i, task in enumerate(self._loader._data.itertuples()):
+            predecessors: list = str(self._loader.data['Predecessor'].loc[i]).split(';')
+            if predecessors[0] != 'nan':
+                # print(predecessors)
+                for j, pred in enumerate(predecessors):
+                    record = self._loader._data[self._loader._data['Task'] == pred]
+                    start_date = record['Actual-End'].iloc[0].date()
+                    end_date = self._loader._data['Actual-Start'][i].date()
+                    x_start = ((start_date - self.start_date).days + 1) * t_width + start[0] + self.render_metrics.horizontal_padding - t_width/2
+                    pred_idx = self._loader.data.index[self._loader.data['Task'] == pred].tolist()[0]
+                    y_start = start[1] + self.render_metrics.vertical_padding + pred_idx*t_height + t_height/2
+                    if start_date == end_date:
+                        x_end = (end_date - self.start_date).days * t_width + start[0] + self.render_metrics.horizontal_padding + t_width/2
+                    else:
+                        x_end = (end_date - self.start_date).days * t_width + start[0] + self.render_metrics.horizontal_padding
+                    if len(predecessors) > 1:
+                        y_end = start[1] + self.render_metrics.vertical_padding + i*t_height + j * (t_height / len(predecessors)) + (t_height / len(predecessors))/2
+                    else:
+                        y_end = start[1] + self.render_metrics.vertical_padding + i*t_height + t_height/2
+                    circle = 0.1 * t_height
+                    pen.setColor(QColor(_colors[pred_idx % len(_colors)]))
+                    brush = QBrush(pen.color())
+                    painter.setBrush(brush)
+                    painter.setPen(pen)
+
+                    # define arrow head
+                    arrow_head = QPainterPath()
+                    if start_date == end_date:
+                        arrow_head.moveTo(x_end - circle / 2, y_end - circle*2)
+                        arrow_head.lineTo(x_end + circle / 2, y_end - circle*2)
+                        arrow_head.lineTo(x_end, y_end)
+                        arrow_head.closeSubpath()
+                    else:
+                        arrow_head.moveTo(x_end - circle * 2, y_end - circle / 2)
+                        arrow_head.lineTo(x_end - circle * 2, y_end + circle / 2)
+                        arrow_head.lineTo(x_end, y_end)
+                        arrow_head.closeSubpath()
+
+                    # starting dot
+                    painter.drawEllipse(x_start - circle/2, y_start - circle/2, circle, circle)
+
+                    # connection lines
+                    painter.drawLine(x_start, y_start, x_start, y_end)
+                    painter.drawLine(x_start, y_end, x_end, y_end)
+
+                    # arrow head
+                    painter.drawPath(arrow_head)
+
+
+        painter.end()
+        return arrowslayer
 
     def draw_monday_lines(self, layer, figure_start, painter, task_width, column):
         """
@@ -585,11 +746,19 @@ class Figure:
             y = start[1] + height + self.render_metrics.vertical_padding
             date = self.start_date + datetime.timedelta(days=i)
             text = date.strftime('%A')[0:2]
+            day_text = date.strftime('%d')
             painter.drawText(
                 x, y,
                 task_width, self.render_metrics.axis_height,
                 Qt.AlignmentFlag.AlignCenter,
-                text)
+                text
+            )
+            painter.drawText(
+                x, y - self.render_metrics.axis_height - self.render_metrics.axis_padding,
+                task_width, self.render_metrics.axis_height + self.render_metrics.axis_padding,
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+                day_text
+            )
             if date.day == 1:
                 painter.drawText(
                     x + self.render_metrics.horizontal_padding,

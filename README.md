@@ -10,7 +10,7 @@ Feel free to copy and/or improve but leave a star if you like it :-)
 
 
 There is also an editor for this diagram. Feel free to check it out: 
-![Gantt Diagram Editor](https://github.com/LS-KS/Gantt-Maker/blob/main/gantt_editor.py)
+[Gantt Diagram Editor](https://github.com/LS-KS/Gantt-Maker/blob/main/gantt_editor.py)
 It is not well tested and there is a bug that where old content is rendered to a new image despite reinstatiate everything. 
 I'll promise to fix this as soon as I work on this project again.
 

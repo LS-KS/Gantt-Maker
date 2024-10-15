@@ -26,5 +26,5 @@ figure.title_properties.line_color = QColor(ganttmaker._colors[0])
 figure.title_properties.font = QFont('Arial', 64)
 
 # draw and save figure
-figure.draw(loader)
+image = figure.draw(loader)
 

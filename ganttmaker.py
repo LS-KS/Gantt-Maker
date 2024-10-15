@@ -2,8 +2,10 @@ import datetime
 import sys
 import pandas as pd
 import os
-from PySide6.QtGui import QImage, QPainter, QPen, QFont, QGuiApplication, QColor, QBrush, QPainterPath
+from PySide6.QtGui import QImage, QPainter, QPen, QFont, QGuiApplication, QColor, QBrush, QPainterPath, QPixmap, \
+    QFontMetrics
 from PySide6.QtCore import Qt, QObject
+from PySide6.QtWidgets import QApplication
 
 _units = {
     'pt': 1,  # 1 point is 1 point
@@ -27,7 +29,7 @@ class RenderMetrics:
     axis_padding: int = 10
     min_task_height: int = 20
     max_task_description_width: int = 200
-    legend_width: int = 5
+    legend_width: int = 620
 
 
 class RenderElementProperties(QObject):
@@ -56,7 +58,10 @@ class RenderElementProperties(QObject):
             case ':':
                 style = Qt.PenStyle.DotLine
             case _:
-                raise ValueError("Unknown linestyle")
+                try:
+                    style = Qt.PenStyle(style)
+                except:
+                    raise ValueError("Unknown linestyle")
         return style
 
     @staticmethod
@@ -98,7 +103,10 @@ class RenderElementProperties(QObject):
     @line_color.setter
     def line_color(self, color: QColor):
         if not isinstance(color, QColor):
-            raise TypeError("box_color must be a QColor object")
+            try:
+                color = QColor(color)
+            except Exception:
+                raise TypeError("box_color must be a QColor object")
         self._line_color = color
 
     @property
@@ -116,7 +124,7 @@ class RenderElementProperties(QObject):
         if isinstance(style, str):
             style = self.penstyle_from_str(style)
         elif not isinstance(style, Qt.PenStyle):
-            raise TypeError("linestyle must be a Qt.PenStyle object")
+            raise TypeError("linestyle must be a Qt.PenStyle object, not a "+str(type(style)))
         self._line_style = style
 
     @property
@@ -142,16 +150,6 @@ class RenderElementProperties(QObject):
     def pen(self) -> QPen:
         return QPen(self._line_color, self._line_width, self._line_style)
 
-    @property
-    def painter(self) -> QPainter:
-        """
-        Method that returns a QPainter object with the properties of the render_element.
-
-        Returns:
-            painter: QPainter object
-        """
-        painter = QPainter()
-        return painter
 
 
 class TaskProperties(RenderElementProperties):
@@ -571,15 +569,29 @@ class Figure:
 
     @staticmethod
     def set_painter_renderoptions(painter):
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        pass
+        #painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        #painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        #painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
-    def draw(self, loader: Dataloader):
+    def draw(self, loader: Dataloader) -> QPixmap:
         """
-        Main method to draw the Gantt chart.
-        The process of drawing is seperated in multiple submethods.
-        The image is built by layering multiple QImage objects.
+        First perform guard checks.
+        Second loads data using Dataloader instance.
+        Third creates a new or gets an existing QApplication instance.
+        Then the image is rendered:
+        1.) Calculate the start coordinates as well as width and height of the figure box.
+        2.) Calculate the height and width of a day of a task.
+        3.) Draw the box layer
+        4.) Draw the title layer
+        5.) Draw the legend layer
+        6.) Draw the grid layer
+        7.) Draw time hints for the beginning of the week and month
+        8.) Draw the planned tasks
+        9.) Draw the actual tasks
+        10.) Draw the axis layer
+        11.) Draw the arrows
+        12.) Combine all layers
 
         Parameters:
             loader: Dataloader object that contains the data to be drawn
@@ -587,23 +599,25 @@ class Figure:
         Returns:
             None
         """
-        # guard checks
+        # First
         if self.start_date is None:
             raise ValueError("start_date not set")
         if self.canvas_size is None:
             raise ValueError("canvas_size not set")
         if not isinstance(loader, Dataloader):
             raise TypeError("data must be a pandas.DataFrame object")
+
+        # Second
         self._loader = loader
         if self._loader._data is None:
             self._loader.load()
 
-        # get or construct QApplication instance
+        # Third
         if not QGuiApplication.instance():
-            app = QGuiApplication(sys.argv)
+            app = QApplication(sys.argv)
         else:
-            app = QGuiApplication(sys.argv)
-
+            app = QApplication.instance()
+        # 1.)
         figure_start: tuple[int, int] = self._define_drawing_start()
         figure_width = self.canvas_size[0] - figure_start[0] - self.render_metrics.horizontal_padding
         figure_height = (self.canvas_size[1]
@@ -611,50 +625,92 @@ class Figure:
                          - self.render_metrics.vertical_padding
                          - self.render_metrics.axis_height
                          - self.render_metrics.vertical_padding)
+        # 2.)
         task_height: int = self._define_task_height(figure_height)
         task_width: int = self._define_task_width(figure_width)
 
+        # draw image layers
+        # 3.)
+        box_layer = self.draw_box_layer(figure_start, figure_width, figure_height)
+        box_layer.save('0_box_layer.png')
+        # 4.)
+        title_layer = self.draw_title()
+        title_layer.save('1_title_layer.png')
+        # 5.)
+        legend_layer = self.draw_legend(figure_start, task_height)
+        legend_layer.save('2_legend_layer.png')
+        # 6.)
+        grid_layer = self.draw_grid_layer(figure_start, task_width, task_height, figure_width, 'Plan-End')
+        grid_layer.save('3_grid_layer.png')
+        # 7.)
+        monday_layer = self.draw_monday_lines(figure_start, task_width, 'Plan-End')
+        monday_layer.save('4_monday_layer.png')
+        # 8.)
+        graph_layer = self.draw_tasks(figure_start, task_height, task_width, 'Plan-Start', 'Plan-End')
+        graph_layer.save('5_graph_layer.png')
+        # 9.)
+        actual_layer = self.draw_tasks(figure_start, task_height, task_width, 'Actual-Start', 'Actual-End', plan=False)
+        actual_layer.save('6_actual_layer.png')
+        # 10.)
+        axes_layer = self.draw_xaxis(figure_start, figure_height, task_width,'Plan-End')
+        axes_layer.save('7_axes_layer.png')
+        # 11.)
+        arrows_layer = self.draw_arrows(figure_start, task_width, task_height)
+        arrows_layer.save('8_arrows_layer.png')
+
+        # 12.)
         image = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         image.fill(self.background_color)
-
-        # draw image layers
-        box_layer = self.draw_box_layer(figure_start, figure_width, figure_height)
-        box_layer = self.draw_title(box_layer)
-        box_layer = self.draw_legend(box_layer, figure_start, task_height)
-        grid_layer = self.draw_grid_layer(figure_start, task_width, task_height, figure_width, 'Plan-End')
-        grid_layer = self.draw_monday_lines(grid_layer, figure_start, task_width, 'Plan-End')
-        graph_layer = self.draw_tasks(figure_start, task_height, task_width, 'Plan-Start', 'Plan-End')
-        actual_layer = self.draw_tasks(figure_start, task_height, task_width, 'Actual-Start', 'Actual-End', plan=False)
-        axes_layer = self.draw_xaxis(figure_start, figure_height, task_width,'Plan-End')
-
-        arrows_layer = self.draw_arrows(figure_start, task_width, task_height)
-
-        # combine all layers
         painter = QPainter()
         painter.begin(image)
         painter.drawImage(0, 0, box_layer)
+        image.save('combined_0.png')
+        painter.drawImage(0, 0, title_layer)
+        image.save('combined_1.png')
+        painter.drawImage(0, 0, legend_layer)
+        image.save('combined_2.png')
         painter.drawImage(0, 0, grid_layer)
+        image.save('combined_3.png')
         painter.drawImage(0, 0, axes_layer)
+        image.save('combined_4.png')
         painter.drawImage(0, 0, graph_layer)
+        image.save('combined_5.png')
         painter.drawImage(0, 0, actual_layer)
+        image.save('combined_6.png')
         painter.drawImage(0, 0, arrows_layer)
+        image.save('combined_7.png')
         painter.end()
 
         # save image
         image.save(self.export_file)
+        return QPixmap.fromImage(image.copy())
 
     def draw_arrows(self, start, t_width, t_height):
         """
         Method that draws arrows at the end of each task.
+        Creates a QPainter object and a QImage object using the canvas size.
+        Configure the painter object with pen and brush from the arrow_properties and set hints for rendering.
+        Iterating over the data, the predecessors of each task are determined.
+        If a task has predecessors, the start and end date of the predecessor are determined.
+        The x and y coordinates of the predecessor are calculated.
+        A circle is drawn at the end of the predecessor.
+        A vertical line is drawn from the end of the predecessor to the y-coordinate of the task.
+        A horizontal line to the beginning of the task is drawn.
+        An arrow head is drawn at the end of the horizontal line.
+        If the end date of the predecessor is the same as the start date of the task,
+        the horizontal line will basically not be visible and the arrow will always face down.
 
         Parameters:
             start: tuple[int, int], starting point of the figure
             t_width: int, width of a task
             t_height: int, height of a task
+
+        Returns:
+            QImage: arrows layer
         """
 
         arrowslayer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
-        painter = self.arrow_properties.painter
+        painter = QPainter()
         painter.begin(arrowslayer)
         painter.setPen(self.arrow_properties.pen)
         painter.setBrush(self.arrow_properties.brush)
@@ -714,18 +770,24 @@ class Figure:
         painter.end()
         return arrowslayer
 
-    def draw_monday_lines(self, layer, figure_start, task_width, column):
+    def draw_monday_lines(self, figure_start, task_width, column):
         """
         Method that draws vertical lines at the beginning of each week and month.
+        Creates two QPainter objects and two QImage objects using the canvas size.
+        Configure the painter objects with color, pen and brush from the week_highlight_properties and set hints for rendering.
+        A range depending on the maximum date in the data and the start date is calculated.
+        While iterating over this range a vertical line for each week is drawn.
+        Configures the painter for monthly hints with color, pen and brush from the month_highlight_properties and set hints for rendering.
+        While iterating over the range a vertical line for each month is drawn.
 
         Parameters:
-            layer: QImage object where the lines are drawn
             figure_start: tuple[int, int], starting point of the figure
             task_width: int that defines the width of a task
-            column: str, column of the data to be drawn
+            column: str, column of the data that is used to determine the maximum date
         """
-        monday_painter = self.week_highlight_properties.painter
-        monthly_painter = self.month_highlight_properties.painter
+        layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
+        monday_painter = QPainter()
+        monthly_painter = QPainter()
         monday_painter.begin(layer)
         monday_painter.setPen(self.week_highlight_properties.pen)
         monday_painter.setBrush(self.week_highlight_properties.brush)
@@ -750,14 +812,25 @@ class Figure:
     def draw_xaxis(self, start, height, task_width, column):
         """
         Method that draws the x-axis of the Gantt chart.
+        Creates a QPainter object and a QImage object using the canvas size.
+        Configure the painter object with pen and brush from the axes_properties and set hints for rendering.
+        A range depending on the maximum date in the data and the start date is calculated.
+        Iterating over this range, x-coordinates are calculated depending on the task_width and figure_start.
+        The first two letters of the weekday and the day of the month are drawn at the x-coordinates.
+        As well as the number of the day in month beneath.
+        If the day is the first of the month, the month and year are drawn as formatted string above the figure.
+        At the end the creation date is drawn at the bottom left of the figure.
 
         Parameters:
             start: tuple[int, int], starting point of the figure
             height: int, height of the figure
             task_width: int, width of a task
             column: str, column of the data to be drawn
+
+        Returns:
+            QImage: axes layer
         """
-        painter = self.axes_properties.painter
+        painter = QPainter()
         axes_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         painter.begin(axes_layer)
         painter.setPen(self.axes_properties.pen)
@@ -786,6 +859,10 @@ class Figure:
                 day_text
             )
             if date.day == 1:
+                metrics = QFontMetrics(self.axes_properties.font)
+                font_width = metrics.horizontalAdvance(date.strftime('%B %Y'))
+                if x + self.render_metrics.horizontal_padding + font_width > self.canvas_size[0]:
+                    continue
                 painter.drawText(
                     x + self.render_metrics.horizontal_padding,
                     (start[1]
@@ -799,8 +876,8 @@ class Figure:
                     Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
                     date.strftime('%B %Y'))
         painter.drawText(
-            self.render_metrics.horizontal_padding,
-            self.canvas_size[1] - self.render_metrics.vertical_padding - self.render_metrics.axis_height,
+            self.render_metrics.horizontal_padding*2,
+            self.canvas_size[1] - self.render_metrics.vertical_padding*2 - self.render_metrics.axis_height,
             self.canvas_size[0] - self.render_metrics.horizontal_padding * 2,
             self.render_metrics.axis_height + self.render_metrics.vertical_padding,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
@@ -813,6 +890,12 @@ class Figure:
     def draw_tasks(self, figure_start: tuple[int, int], task_height: int, task_width: int, start_column, end_column, plan=True):
         """
         Method that draws the tasks of the Gantt chart.
+        Creates a QPainter object and a QImage object using the canvas size.
+        Configure the painter object with pen and brush from the task_properties and set hints for rendering.
+        the colors of the tasks are determined by the index of the task in the dataframe.
+        The alpha value of the plan and actual data is set in the task_properties.
+        For each task in the dataframe a rectangle is drawn with the start and end date of the task.
+        The height is determined by the task_height.
 
         Parameters:
             figure_start: tuple[int, int], starting point of the figure
@@ -821,8 +904,11 @@ class Figure:
             start_column: str, column of the data to be drawn
             end_column: str, column of the data to be drawn
             plan: bool, if True, the plan is drawn, if False, the actual data is drawn
+
+        Returns:
+            QImage: graph layer
         """
-        painter = self.task_properties.painter
+        painter = QPainter()
         graph_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         painter.begin(graph_layer)
         painter.setPen(self.task_properties.pen)
@@ -855,16 +941,25 @@ class Figure:
     def draw_grid_layer(self, figure_start, task_width, task_height, figure_width, column):
         """
         Method that draws the grid of the Gantt chart.
+        Creates a QPainter object and a QImage object using the canvas size.
+        Configure the painter object with color, pen and brush from the grid_properties and set hints for rendering.
+        A range depending of the maximum date in the data and the start date is calculated.
+        While iterating over this range a vertical line for each day is drawn.
+        For horizontal lines the number of tasks is determined by the length of the dataframe. The horizontal lines are
+        drawn for each task.
 
         Parameters:
             figure_start: tuple[int, int], starting point of the figure
             task_width: int, width of a task
             task_height: int, height of a task
             figure_width: int, width of the figure
-            column: str, column of the data to be drawn
+            column: str, column of the data that is used to determine the maximum date
+
+        Returns:
+            QImage: grid layer
         """
         grid_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
-        painter = self.grid_properties.painter
+        painter = QPainter()
         painter.begin(grid_layer)
         painter.setPen(self.grid_properties.pen)
         painter.setBrush(self.grid_properties.brush)
@@ -887,13 +982,20 @@ class Figure:
     def draw_box_layer(self, figure_start, width, height):
         """
         Method that draws the box of the Gantt chart.
+        First initializes a QPainter object.
+        Second initialize a QImage object using the canvas size.
+        Configure the painter object with color, pen and brush from the box_properties and set hints for rendering.
+        Draw the box rectangle.
 
         Parameters:
             figure_start: tuple[int, int], starting point of the figure
             width: int, width of the box
             height: int, height of the box
+
+        Returns:
+            QImage: box layer
         """
-        painter = self.box_properties.painter
+        painter = QPainter()
         box_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
         painter.begin(box_layer)
         painter.setPen(self.box_properties.pen)
@@ -909,40 +1011,54 @@ class Figure:
         painter.end()
         return box_layer
 
-    def draw_title(self, box_layer):
+    def draw_title(self):
         """
         Method that draws the title of the Gantt chart.
+        First initializes a QPainter object and a QImage object using the canvas size.
+        Configure the painter object with color, pen and brush from the title_properties and set hints for rendering.
+        Draw the title text using dimensions from the render_metrics.
 
-        Parameters:
-            box_layer: QImage object where the title is drawn
+        Returns:
+            QImage: title layer
         """
-        painter = self.title_properties.painter
-        painter.begin(box_layer)
+        painter = QPainter()
+        title_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
+        painter.begin(title_layer)
         painter.setPen(self.title_properties.pen)
         painter.setFont(self.title_properties.font)
         painter.setBrush(self.title_properties.brush)
         self.set_painter_renderoptions(painter)
         painter.drawText(
-            0,
+            self.render_metrics.horizontal_padding,
             self.render_metrics.title_padding,
-            self.canvas_size[0],
+            self.canvas_size[0] - self.render_metrics.horizontal_padding * 2,
             self.render_metrics.title_height,
             Qt.AlignmentFlag.AlignCenter,
             self.title_properties.text)
         painter.end()
-        return box_layer
+        return title_layer
 
-    def draw_legend(self, box_layer, figure_start, task_height):
+    def draw_legend(self, figure_start, task_height):
         """
         Method that draws the legend of the Gantt chart.
+        First create a QPainter object and a QImage object using the canvas size.
+        Configure the painter object with color, pen and brush from the legend_properties and set hints for rendering.
+        Iterate over the dataframe stored in Dataloader object.
+        The vertical starting position of each legend entry is determined by the top edge of the figure box and the task height
+        as well as the index in the dataframe.
+        The horizontal starting position is determined by the horizontal padding of the render_metrics attribute.
+        The height of a legend entry is the task height. The width is determined legend_width from the render_metrics attribute.
 
         Parameters:
-            box_layer: QImage object where the legend is drawn
             figure_start: tuple[int, int], starting point of the figure
             task_height: int, height of a task
+
+        Returns:
+            QImage: legend layer
         """
-        painter = self.legend_properties.painter
-        painter.begin(box_layer)
+        painter = QPainter()
+        legend_layer = QImage(self.canvas_size[0], self.canvas_size[1], QImage.Format.Format_ARGB32)
+        painter.begin(legend_layer)
         painter.setPen(self.legend_properties.pen)
         painter.setBrush(self.legend_properties.brush)
         painter.setFont(self.legend_properties.font)
@@ -959,7 +1075,7 @@ class Figure:
                 self._loader.data['Task'][i] + ": " + self._loader.data['Description'][i],
             )
         painter.end()
-        return box_layer
+        return legend_layer
 
     def _define_task_height(self, height) -> int:
         if self.canvas_size is None:

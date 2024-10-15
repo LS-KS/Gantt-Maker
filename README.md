@@ -8,6 +8,12 @@ Feel free to copy and/or improve but leave a star if you like it :-)
 
 ![Gantt Diagram](https://github.com/LS-KS/Gantt-Maker/blob/main/example_data/project_a.png)
 
+
+There is also an editor for this diagram. Feel free to check it out: 
+![Gantt Diagram Editor](https://github.com/LS-KS/Gantt-Maker/blob/main/gantt_editor.py)
+It is not well tested and there is a bug that where old content is rendered to a new image despite reinstatiate everything. 
+I'll promise to fix this as soon as I work on this project again.
+
 # Dependencies
 
 - Qt bindings PySide6 are used as the render backend which is the reason Qt classes are preferred datatypes.
@@ -103,8 +109,7 @@ Feel free to contact me if there is a problem.
 
 - When changing the fontsize the property defining the underlying rectangle must be adjusted manually. If it doesn't match, the text will either be clipped or too much space may be used.
 - I was actually too lazy to check for legend size. So the horizontal length of the legend must be adjusted manually
-
-
+- Using the editor, there is a bug that old content is rendered to a new image despite reinstatiate everything. You can use it to configure your preferred settings and copy fonts and colors to a script.
 
 # Contributing
 

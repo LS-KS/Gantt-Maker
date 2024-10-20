@@ -470,7 +470,7 @@ class Figure:
         self.task_properties.corner_radius = 1.0
 
         self._background_color: QColor = QColor('transparent')
-        self._export_file: str | None = None
+        self._export_file: str | None = 'gantt_diagram.png'
         self._start_date: datetime.date | None = None
         self._canvas_size: tuple[int, int] | None = None
         self._unit: float = _units['px']
@@ -664,21 +664,23 @@ class Figure:
         painter = QPainter()
         painter.begin(image)
         painter.drawImage(0, 0, box_layer)
-        image.save('combined_0.png')
+        #image.save('combined_0.png')
         painter.drawImage(0, 0, title_layer)
-        image.save('combined_1.png')
+        #image.save('combined_1.png')
         painter.drawImage(0, 0, legend_layer)
-        image.save('combined_2.png')
+        #image.save('combined_2.png')
         painter.drawImage(0, 0, grid_layer)
-        image.save('combined_3.png')
+        #image.save('combined_3.png')
         painter.drawImage(0, 0, axes_layer)
-        image.save('combined_4.png')
+        #image.save('combined_4.png')
+        painter.drawImage(0, 0, monday_layer)
+        #image.save('combined_5.png')
         painter.drawImage(0, 0, graph_layer)
-        image.save('combined_5.png')
+        #image.save('combined_6.png')
         painter.drawImage(0, 0, actual_layer)
-        image.save('combined_6.png')
+        #image.save('combined_7.png')
         painter.drawImage(0, 0, arrows_layer)
-        image.save('combined_7.png')
+        #image.save('combined_8.png')
         painter.end()
 
         # save image

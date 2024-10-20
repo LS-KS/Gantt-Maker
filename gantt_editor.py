@@ -261,7 +261,7 @@ class MainWindow(QMainWindow):
     def _build_menu(self):
         def new_placeholder():
             placeholder = QLabel("")
-            placeholder.setStyleSheet(f"background-color: {"darkgray"}")
+            placeholder.setStyleSheet(f"background-color: {'darkgray'}")
             placeholder.setFixedHeight(2)
             return placeholder
 

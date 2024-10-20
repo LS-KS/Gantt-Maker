@@ -48,6 +48,14 @@ See example_usage.py to get an impression how to customize the diagram.
 
 [example_usage.py](https://github.com/LS-KS/Gantt-Maker/blob/main/example_usage.py)
 
+To start the editor, navigate into the directory of this repository and run the following command:
+
+```bash
+python gantt_editor.py
+```
+
+You may also execute gantt_editor.py in your favorite IDE.
+
 ## Excel sheet format
 To make it actually work, your excel sheet must have the following columns:
 
@@ -107,9 +115,11 @@ Feel free to contact me if there is a problem.
 
 # Known issues
 
-- When changing the fontsize the property defining the underlying rectangle must be adjusted manually. If it doesn't match, the text will either be clipped or too much space may be used.
 - I was actually too lazy to check for legend size. So the horizontal length of the legend must be adjusted manually
-- Using the editor, there is a bug that old content is rendered to a new image despite reinstatiate everything. You can use it to configure your preferred settings and copy fonts and colors to a script.
+
+## Issues with the editor
+- On MacOS Sequoia there is actual an issue with weird artefacts on the image after settings are changed. On Windows everything works fine.
+- Not every property will trigger a redraw of the diagram.
 
 # Contributing
 
